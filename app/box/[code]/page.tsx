@@ -10,7 +10,6 @@ type BoxRow = {
   code: string;
   name: string | null;
   location: string | null;
-  notes: string | null;
 };
 
 type ItemRow = {
@@ -31,12 +30,13 @@ export default function BoxPage() {
   const [box, setBox] = useState<BoxRow | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
 
-  // Add-item form state
+  // Add item form
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newQty, setNewQty] = useState(1);
 
-  // Load box + items
+  /* ================= LOAD BOX + ITEMS ================= */
+
   useEffect(() => {
     if (!code) return;
 
@@ -46,18 +46,12 @@ export default function BoxPage() {
 
       const boxRes = await supabase
         .from("boxes")
-        .select("id, code, name, location, notes")
+        .select("id, code, name, location")
         .eq("code", code)
         .maybeSingle();
 
-      if (boxRes.error) {
-        setError(boxRes.error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (!boxRes.data) {
-        setError(`Box not found for code: ${code}`);
+      if (boxRes.error || !boxRes.data) {
+        setError("Box not found");
         setLoading(false);
         return;
       }
@@ -68,75 +62,76 @@ export default function BoxPage() {
         .from("items")
         .select("id, name, description, photo_url, quantity")
         .eq("box_id", boxRes.data.id)
-        .order("name", { ascending: true });
+        .order("name");
 
-      if (itemsRes.error) {
-        setError(itemsRes.error.message);
-        setItems([]);
-      } else {
-        setItems(itemsRes.data ?? []);
-      }
-
+      setItems(itemsRes.data ?? []);
       setLoading(false);
     }
 
     load();
   }, [code]);
 
-  async function reloadItems(currentBoxId: string) {
-    const itemsRes = await supabase
+  async function reloadItems(boxId: string) {
+    const { data } = await supabase
       .from("items")
       .select("id, name, description, photo_url, quantity")
-      .eq("box_id", currentBoxId)
-      .order("name", { ascending: true });
+      .eq("box_id", boxId)
+      .order("name");
 
-    if (itemsRes.error) {
-      setError(itemsRes.error.message);
-      setItems([]);
-    } else {
-      setItems(itemsRes.data ?? []);
-    }
+    setItems(data ?? []);
   }
 
+  /* ================= ADD ITEM ================= */
+
   async function addItem() {
-    if (!box) return;
+    if (!box || !newName.trim()) return;
 
-    const name = newName.trim();
-    if (!name) {
-      setError("Item name is required.");
-      return;
-    }
+    const { error } = await supabase.from("items").insert({
+      box_id: box.id,
+      name: newName.trim(),
+      description: newDesc.trim() || null,
+      quantity: newQty,
+    });
 
-    setError(null);
-
-    const { error: insertError } = await supabase.from("items").insert([
-      {
-        name,
-        description: newDesc.trim() || null,
-        quantity: newQty || 1,
-        box_id: box.id,
-      },
-    ]);
-
-    if (insertError) {
-      setError(insertError.message);
+    if (error) {
+      setError(error.message);
       return;
     }
 
     setNewName("");
     setNewDesc("");
     setNewQty(1);
-
     await reloadItems(box.id);
   }
 
+  /* ================= UPDATE QUANTITY ================= */
+
+  async function saveQuantity(itemId: string, qty: number) {
+    const safeQty = Math.max(0, Math.floor(qty));
+
+    const { error } = await supabase
+      .from("items")
+      .update({ quantity: safeQty })
+      .eq("id", itemId);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, quantity: safeQty } : i
+      )
+    );
+  }
+
+  /* ================= PHOTO UPLOAD ================= */
+
   async function uploadPhoto(itemId: string, file: File) {
-    setError(null);
+    const ext = file.name.split(".").pop() || "jpg";
+    const fileName = `${itemId}-${Date.now()}.${ext}`;
 
-    const fileExt = file.name.split(".").pop() || "jpg";
-    const fileName = `${itemId}-${Date.now()}.${fileExt}`;
-
-    // Upload to Storage bucket "item-photos"
     const uploadRes = await supabase.storage
       .from("item-photos")
       .upload(fileName, file, { upsert: true });
@@ -146,26 +141,19 @@ export default function BoxPage() {
       return;
     }
 
-    // Get a public URL
-    const publicUrlRes = supabase.storage
+    const publicUrl = supabase.storage
       .from("item-photos")
-      .getPublicUrl(fileName);
+      .getPublicUrl(fileName).data.publicUrl;
 
-    const publicUrl = publicUrlRes.data.publicUrl;
-
-    // Save the URL on the item row
-    const { error: updateError } = await supabase
+    await supabase
       .from("items")
       .update({ photo_url: publicUrl })
       .eq("id", itemId);
 
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-
     if (box) await reloadItems(box.id);
   }
+
+  /* ================= PRINT SINGLE QR ================= */
 
   async function printSingleQrLabel(
     boxCode: string,
@@ -173,241 +161,158 @@ export default function BoxPage() {
     location?: string | null
   ) {
     const url = `${window.location.origin}/box/${encodeURIComponent(boxCode)}`;
-    const qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 420 });
+    const qr = await QRCode.toDataURL(url, { width: 420 });
 
-    const w = window.open("", "_blank", "width=600,height=800");
-    if (!w) {
-      alert("Popup blocked. Please allow popups to print the label.");
-      return;
-    }
+    const w = window.open("", "_blank");
+    if (!w) return;
 
-    w.document.open();
     w.document.write(`
       <html>
-        <head>
-          <title>${boxCode} QR</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .label { width: 320px; border: 2px solid #000; padding: 14px; }
-            .code { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
-            .meta { font-size: 12px; margin-bottom: 10px; }
-            img { width: 100%; height: auto; display: block; }
-            .url { font-size: 10px; margin-top: 8px; word-break: break-all; }
-          </style>
-        </head>
-        <body>
-          <div class="label">
-            <div class="code">${boxCode}</div>
-            ${name ? `<div class="meta">${String(name)}</div>` : ""}
-            ${
-              location
-                ? `<div class="meta">Location: ${String(location)}</div>`
-                : ""
-            }
-            <img src="${qrDataUrl}" alt="QR for ${boxCode}" />
-            <div class="url">${url}</div>
+        <body style="font-family:Arial;padding:20px">
+          <div style="width:320px;border:2px solid #000;padding:14px">
+            <div style="font-size:22px;font-weight:800">${boxCode}</div>
+            ${name ? `<div>${name}</div>` : ""}
+            ${location ? `<div>Location: ${location}</div>` : ""}
+            <img src="${qr}" style="width:100%" />
+            <div style="font-size:10px">${url}</div>
           </div>
-          <script>
-            window.onload = () => window.print();
-          </script>
+          <script>window.onload=()=>window.print()</script>
         </body>
       </html>
     `);
-    w.document.close();
   }
 
+  /* ================= RENDER ================= */
+
+  if (loading) return <p>Loading…</p>;
+  if (!box) return <p>Box not found.</p>;
+
   return (
-    <main style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-      <p>
-        <a href="/boxes">← Back to Boxes</a>
-      </p>
+    <main style={{ padding: 20 }}>
+      <h1>{box.code}</h1>
+      {box.name && <strong>{box.name}</strong>}
+      {box.location && <div>Location: {box.location}</div>}
 
-      {!code && <p>Loading…</p>}
-      {code && loading && <p>Loading box…</p>}
+      <button
+        onClick={() => printSingleQrLabel(box.code, box.name, box.location)}
+        style={{ margin: "12px 0", padding: 10 }}
+      >
+        Print QR label for this box
+      </button>
 
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+      <hr />
 
-      {!loading && !error && box && (
-        <>
-          <h1>{box.code}</h1>
+      <h2>Add Item</h2>
+      <input
+        placeholder="Name"
+        value={newName}
+        onChange={(e) => setNewName(e.target.value)}
+      />
+      <input
+        placeholder="Description"
+        value={newDesc}
+        onChange={(e) => setNewDesc(e.target.value)}
+      />
+      <input
+        type="number"
+        min={1}
+        value={newQty}
+        onChange={(e) => setNewQty(Number(e.target.value))}
+      />
+      <button onClick={addItem}>Add item</button>
 
-          {box.name && (
-            <p>
-              <strong>{box.name}</strong>
-            </p>
-          )}
+      <hr />
 
-          {box.location && <p>Location: {box.location}</p>}
+      <h2>Items</h2>
 
-          <button
-            type="button"
-            onClick={() => printSingleQrLabel(box.code, box.name, box.location)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #444",
-              cursor: "pointer",
-              marginTop: 10,
-              marginBottom: 10,
-            }}
-          >
-            Print QR label for this box
-          </button>
+      <ul>
+        {items.map((i) => (
+          <li key={i.id} style={{ marginBottom: 20 }}>
+            <strong>{i.name}</strong>
 
-          <hr style={{ margin: "16px 0" }} />
-
-          <h2>Items ({items.length})</h2>
-
-          {/* Add Item form */}
-          <div
-            style={{
-              border: "1px solid #333",
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 16,
-            }}
-          >
-            <h3 style={{ marginTop: 0 }}>Add Item</h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Item name (required)"
-                style={{ padding: 8, borderRadius: 6, border: "1px solid #444" }}
-              />
-
-              <input
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Description (optional)"
-                style={{ padding: 8, borderRadius: 6, border: "1px solid #444" }}
-              />
+            {/* QUANTITY EDITOR */}
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <button onClick={() =>
+                setItems(prev =>
+                  prev.map(it =>
+                    it.id === i.id
+                      ? { ...it, quantity: Math.max(0, (it.quantity ?? 0) - 1) }
+                      : it
+                  )
+                )
+              }>−</button>
 
               <input
                 type="number"
-                value={newQty}
-                onChange={(e) => setNewQty(Number(e.target.value))}
-                min={1}
-                style={{
-                  padding: 8,
-                  borderRadius: 6,
-                  border: "1px solid #444",
-                  width: 120,
-                }}
+                min={0}
+                value={i.quantity ?? 0}
+                onChange={(e) =>
+                  setItems(prev =>
+                    prev.map(it =>
+                      it.id === i.id
+                        ? { ...it, quantity: Number(e.target.value) }
+                        : it
+                    )
+                  )
+                }
+                style={{ width: 80 }}
               />
 
-              <button
-                onClick={addItem}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #444",
-                  cursor: "pointer",
-                }}
-              >
-                Add item to this box
+              <button onClick={() =>
+                setItems(prev =>
+                  prev.map(it =>
+                    it.id === i.id
+                      ? { ...it, quantity: (it.quantity ?? 0) + 1 }
+                      : it
+                  )
+                )
+              }>+</button>
+
+              <button onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
+                Save
               </button>
             </div>
-          </div>
 
-          {/* Items list */}
-          {items.length === 0 ? (
-            <p>No items in this box yet.</p>
-          ) : (
-            <ul style={{ paddingLeft: 18 }}>
-              {items.map((i) => (
-                <li key={i.id} style={{ marginBottom: 16 }}>
-                  <strong>{i.name}</strong>
-                  {i.quantity ? ` (x${i.quantity})` : ""}
-                  {i.description ? <div>{i.description}</div> : null}
+            {i.description && <div>{i.description}</div>}
 
-                  {i.photo_url ? (
-                    <div style={{ marginTop: 6 }}>
-                      <img
-                        src={i.photo_url}
-                        alt={i.name}
-                        style={{ maxWidth: 220, borderRadius: 8 }}
-                      />
-                    </div>
-                  ) : null}
+            {i.photo_url && (
+              <img
+                src={i.photo_url}
+                style={{ width: "100%", maxWidth: 300, marginTop: 6 }}
+              />
+            )}
 
-                 {/* Add / change photo */}
-<div style={{ marginTop: 10 }}>
-  <div style={{ marginBottom: 6 }}>Add / change photo:</div>
-
-  {/* Camera input */}
-  <input
-    id={`camera-${i.id}`}
-    type="file"
-    accept="image/*"
-    capture="environment"
-    style={{ display: "none" }}
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) uploadPhoto(i.id, file);
-      e.currentTarget.value = "";
-    }}
-  />
-
-  {/* File picker input */}
-  <input
-    id={`file-${i.id}`}
-    type="file"
-    accept="image/*"
-    style={{ display: "none" }}
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) uploadPhoto(i.id, file);
-      e.currentTarget.value = "";
-    }}
-  />
-
-  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-    <button
-      type="button"
-      onClick={() => {
-        const el = document.getElementById(
-          `camera-${i.id}`
-        ) as HTMLInputElement | null;
-        el?.click();
-      }}
-      style={{
-        padding: "10px 12px",
-        borderRadius: 8,
-        border: "1px solid #444",
-        cursor: "pointer",
-      }}
-    >
-      Take photo
-    </button>
-
-    <button
-      type="button"
-      onClick={() => {
-        const el = document.getElementById(
-          `file-${i.id}`
-        ) as HTMLInputElement | null;
-        el?.click();
-      }}
-      style={{
-        padding: "10px 12px",
-        borderRadius: 8,
-        border: "1px solid #444",
-        cursor: "pointer",
-      }}
-    >
-      Choose file
-    </button>
-  </div>
-</div>
-
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+            {/* PHOTO UPLOAD */}
+            <div style={{ marginTop: 8 }}>
+              <input
+                id={`cam-${i.id}`}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={(e) =>
+                  e.target.files && uploadPhoto(i.id, e.target.files[0])
+                }
+              />
+              <input
+                id={`file-${i.id}`}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) =>
+                  e.target.files && uploadPhoto(i.id, e.target.files[0])
+                }
+              />
+              <button onClick={() =>
+                document.getElementById(`cam-${i.id}`)?.click()
+              }>Take photo</button>
+              <button onClick={() =>
+                document.getElementById(`file-${i.id}`)?.click()
+              }>Choose file</button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
