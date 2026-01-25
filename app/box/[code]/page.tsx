@@ -374,7 +374,7 @@ export default function BoxPage() {
   const destinationBoxes = allBoxes.filter((b) => b.id !== box.id);
 
   return (
-    <main style={{ paddingBottom: 110 }}>
+    <main style={{ paddingBottom: 180 }}>
       {/* Header */}
       <div
         style={{
@@ -839,6 +839,64 @@ export default function BoxPage() {
           </button>
         </div>
       </Modal>
+      {/* Sticky Move Action Bar */}
+{moveMode && (
+  <div
+    style={{
+      position: "fixed",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      padding: "12px 14px calc(env(safe-area-inset-bottom) + 12px)",
+      background: "#ffffff",
+      borderTop: "1px solid #e5e7eb",
+      boxShadow: "0 -10px 30px rgba(0,0,0,0.15)",
+      zIndex: 3500,
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+    }}
+  >
+    <div style={{ fontWeight: 900 }}>
+      Selected: {selectedIds.size}
+    </div>
+
+    <div style={{ flex: 1, minWidth: 160 }}>
+      <select
+        value={bulkDestBoxId}
+        onChange={(e) => onDestinationChange(e.target.value)}
+        disabled={busy}
+        style={{ width: "100%" }}
+      >
+        <option value="">Destination…</option>
+        <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
+        {destinationBoxes.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.code}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <button
+      type="button"
+      onClick={requestMoveSelected}
+      disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
+      style={{
+        background: "#111",
+        color: "#fff",
+        fontWeight: 900,
+        padding: "10px 16px",
+        borderRadius: 14,
+      }}
+    >
+      {busy ? "Moving…" : "Move"}
+    </button>
+  </div>
+)}
+
     </main>
   );
 }
