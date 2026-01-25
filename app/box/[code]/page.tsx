@@ -38,6 +38,9 @@ export default function BoxPage() {
   const [newDesc, setNewDesc] = useState("");
   const [newQty, setNewQty] = useState(1);
 
+  // 🔍 full screen viewer state
+  const [viewItem, setViewItem] = useState<ItemRow | null>(null);
+
   /* ================= LOAD ================= */
 
   useEffect(() => {
@@ -117,8 +120,6 @@ export default function BoxPage() {
   }
 
   async function deleteItemAndPhoto(item: ItemRow) {
-    setError(null);
-
     if (item.photo_url) {
       const path = getStoragePathFromPublicUrl(item.photo_url);
       if (path) {
@@ -126,16 +127,7 @@ export default function BoxPage() {
       }
     }
 
-    const { error } = await supabase
-      .from("items")
-      .delete()
-      .eq("id", item.id);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
+    await supabase.from("items").delete().eq("id", item.id);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
   }
 
@@ -150,7 +142,6 @@ export default function BoxPage() {
       const ok = window.confirm(
         `Quantity is 0.\n\nDelete "${item.name}" from this box?`
       );
-
       if (ok) {
         await deleteItemAndPhoto(item);
       } else if (box) {
@@ -159,15 +150,10 @@ export default function BoxPage() {
       return;
     }
 
-    const { error } = await supabase
+    await supabase
       .from("items")
       .update({ quantity: safeQty })
       .eq("id", itemId);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
 
     setItems((prev) =>
       prev.map((i) =>
@@ -182,14 +168,9 @@ export default function BoxPage() {
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `${itemId}-${Date.now()}.${ext}`;
 
-    const upload = await supabase.storage
+    await supabase.storage
       .from("item-photos")
       .upload(fileName, file, { upsert: true });
-
-    if (upload.error) {
-      setError(upload.error.message);
-      return;
-    }
 
     const publicUrl = supabase.storage
       .from("item-photos")
@@ -309,11 +290,17 @@ export default function BoxPage() {
 
             {i.description && <div>{i.description}</div>}
 
+            {/* Show item button */}
             {i.photo_url && (
-              <img src={i.photo_url} style={{ width: "100%", maxWidth: 300 }} />
+              <button
+                style={{ marginTop: 8 }}
+                onClick={() => setViewItem(i)}
+              >
+                Show item
+              </button>
             )}
 
-            {/* Photo buttons */}
+            {/* Photo upload buttons */}
             <div style={{ marginTop: 8 }}>
               <input
                 id={`cam-${i.id}`}
@@ -340,6 +327,32 @@ export default function BoxPage() {
           </li>
         ))}
       </ul>
+
+      {/* FULL SCREEN VIEWER */}
+      {viewItem && viewItem.photo_url && (
+        <div
+          onClick={() => setViewItem(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <img
+            src={viewItem.photo_url}
+            alt={viewItem.name}
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              objectFit: "contain",
+            }}
+          />
+        </div>
+      )}
     </main>
   );
 }
