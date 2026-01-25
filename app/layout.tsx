@@ -4,6 +4,10 @@ export const metadata: Metadata = {
   title: "Storage Inventory",
   description: "Box + item inventory",
 };
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export default function RootLayout({
   children,
@@ -24,6 +28,7 @@ export default function RootLayout({
           }}
         >
           <div
+            className="nav-wrap"
             style={{
               maxWidth: 1000,
               margin: "0 auto",
@@ -45,7 +50,7 @@ export default function RootLayout({
               Storage Inventory
             </a>
 
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div className="nav-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <a href="/boxes" style={linkStyle}>
                 Boxes
               </a>
@@ -60,9 +65,29 @@ export default function RootLayout({
         </nav>
 
         {/* Page content */}
-        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "16px" }}>
-          {children}
-        </div>
+        <div
+  style={{
+    maxWidth: 1000,
+    margin: "0 auto",
+    padding: "16px",
+  }}
+>
+  <style>{`
+    /* Mobile tweaks */
+    @media (max-width: 600px) {
+      .nav-wrap { flex-direction: column; align-items: flex-start; }
+      .nav-links { width: 100%; }
+      .nav-links a { flex: 1; text-align: center; }
+      .page-pad { padding: 12px !important; }
+      button { width: 100%; }
+      input { width: 100%; box-sizing: border-box; }
+      img { max-width: 100%; height: auto; }
+    }
+  `}</style>
+
+  <div className="page-pad">{children}</div>
+</div>
+
       </body>
     </html>
   );
