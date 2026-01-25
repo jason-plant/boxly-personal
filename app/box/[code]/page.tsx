@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabaseClient";
 
+/* ================= TYPES ================= */
+
 type BoxRow = {
   id: string;
   code: string;
@@ -20,6 +22,8 @@ type ItemRow = {
   quantity: number | null;
 };
 
+/* ================= PAGE ================= */
+
 export default function BoxPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code ? decodeURIComponent(String(params.code)) : "";
@@ -30,12 +34,11 @@ export default function BoxPage() {
   const [box, setBox] = useState<BoxRow | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
 
-  // Add item form
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newQty, setNewQty] = useState(1);
 
-  /* ================= LOAD BOX + ITEMS ================= */
+  /* ================= LOAD ================= */
 
   useEffect(() => {
     if (!code) return;
@@ -50,7 +53,7 @@ export default function BoxPage() {
         .eq("code", code)
         .maybeSingle();
 
-      if (boxRes.error || !boxRes.data) {
+      if (!boxRes.data || boxRes.error) {
         setError("Box not found");
         setLoading(false);
         return;
@@ -104,10 +107,57 @@ export default function BoxPage() {
     await reloadItems(box.id);
   }
 
-  /* ================= UPDATE QUANTITY ================= */
+  /* ================= DELETE HELPERS ================= */
+
+  function getStoragePathFromPublicUrl(url: string) {
+    const marker = "/item-photos/";
+    const idx = url.indexOf(marker);
+    if (idx === -1) return null;
+    return url.substring(idx + marker.length);
+  }
+
+  async function deleteItemAndPhoto(item: ItemRow) {
+    setError(null);
+
+    if (item.photo_url) {
+      const path = getStoragePathFromPublicUrl(item.photo_url);
+      if (path) {
+        await supabase.storage.from("item-photos").remove([path]);
+      }
+    }
+
+    const { error } = await supabase
+      .from("items")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+  }
+
+  /* ================= SAVE QUANTITY ================= */
 
   async function saveQuantity(itemId: string, qty: number) {
     const safeQty = Math.max(0, Math.floor(qty));
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    if (safeQty === 0) {
+      const ok = window.confirm(
+        `Quantity is 0.\n\nDelete "${item.name}" from this box?`
+      );
+
+      if (ok) {
+        await deleteItemAndPhoto(item);
+      } else if (box) {
+        await reloadItems(box.id);
+      }
+      return;
+    }
 
     const { error } = await supabase
       .from("items")
@@ -132,12 +182,12 @@ export default function BoxPage() {
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `${itemId}-${Date.now()}.${ext}`;
 
-    const uploadRes = await supabase.storage
+    const upload = await supabase.storage
       .from("item-photos")
       .upload(fileName, file, { upsert: true });
 
-    if (uploadRes.error) {
-      setError(uploadRes.error.message);
+    if (upload.error) {
+      setError(upload.error.message);
       return;
     }
 
@@ -153,7 +203,7 @@ export default function BoxPage() {
     if (box) await reloadItems(box.id);
   }
 
-  /* ================= PRINT SINGLE QR ================= */
+  /* ================= PRINT QR ================= */
 
   async function printSingleQrLabel(
     boxCode: string,
@@ -193,33 +243,17 @@ export default function BoxPage() {
       {box.name && <strong>{box.name}</strong>}
       {box.location && <div>Location: {box.location}</div>}
 
-      <button
-        onClick={() => printSingleQrLabel(box.code, box.name, box.location)}
-        style={{ margin: "12px 0", padding: 10 }}
-      >
-        Print QR label for this box
+      <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>
+        Print QR label
       </button>
 
       <hr />
 
       <h2>Add Item</h2>
-      <input
-        placeholder="Name"
-        value={newName}
-        onChange={(e) => setNewName(e.target.value)}
-      />
-      <input
-        placeholder="Description"
-        value={newDesc}
-        onChange={(e) => setNewDesc(e.target.value)}
-      />
-      <input
-        type="number"
-        min={1}
-        value={newQty}
-        onChange={(e) => setNewQty(Number(e.target.value))}
-      />
-      <button onClick={addItem}>Add item</button>
+      <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+      <input placeholder="Description" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
+      <input type="number" min={1} value={newQty} onChange={(e) => setNewQty(Number(e.target.value))} />
+      <button onClick={addItem}>Add</button>
 
       <hr />
 
@@ -230,7 +264,7 @@ export default function BoxPage() {
           <li key={i.id} style={{ marginBottom: 20 }}>
             <strong>{i.name}</strong>
 
-            {/* QUANTITY EDITOR */}
+            {/* Quantity editor */}
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
               <button onClick={() =>
                 setItems(prev =>
@@ -276,13 +310,10 @@ export default function BoxPage() {
             {i.description && <div>{i.description}</div>}
 
             {i.photo_url && (
-              <img
-                src={i.photo_url}
-                style={{ width: "100%", maxWidth: 300, marginTop: 6 }}
-              />
+              <img src={i.photo_url} style={{ width: "100%", maxWidth: 300 }} />
             )}
 
-            {/* PHOTO UPLOAD */}
+            {/* Photo buttons */}
             <div style={{ marginTop: 8 }}>
               <input
                 id={`cam-${i.id}`}
@@ -290,25 +321,21 @@ export default function BoxPage() {
                 accept="image/*"
                 capture="environment"
                 style={{ display: "none" }}
-                onChange={(e) =>
-                  e.target.files && uploadPhoto(i.id, e.target.files[0])
-                }
+                onChange={(e) => e.target.files && uploadPhoto(i.id, e.target.files[0])}
               />
               <input
                 id={`file-${i.id}`}
                 type="file"
                 accept="image/*"
                 style={{ display: "none" }}
-                onChange={(e) =>
-                  e.target.files && uploadPhoto(i.id, e.target.files[0])
-                }
+                onChange={(e) => e.target.files && uploadPhoto(i.id, e.target.files[0])}
               />
-              <button onClick={() =>
-                document.getElementById(`cam-${i.id}`)?.click()
-              }>Take photo</button>
-              <button onClick={() =>
-                document.getElementById(`file-${i.id}`)?.click()
-              }>Choose file</button>
+              <button onClick={() => document.getElementById(`cam-${i.id}`)?.click()}>
+                Take photo
+              </button>
+              <button onClick={() => document.getElementById(`file-${i.id}`)?.click()}>
+                Choose file
+              </button>
             </div>
           </li>
         ))}
