@@ -56,6 +56,26 @@ export default function BoxPage() {
   const selectedRef = useRef<Set<string>>(new Set());
   const [bulkDestBoxId, setBulkDestBoxId] = useState("");
 
+  /* ========= MODALS STATE ========= */
+
+  // Create new destination box modal
+  const [newBoxOpen, setNewBoxOpen] = useState(false);
+  const [newBoxName, setNewBoxName] = useState("");
+
+  // Confirm move modal
+  const [confirmMoveOpen, setConfirmMoveOpen] = useState(false);
+  const confirmMoveInfoRef = useRef<{
+    count: number;
+    fromCode: string;
+    toId: string;
+    toCode: string;
+    itemIds: string[];
+  } | null>(null);
+
+  // Confirm delete item modal (qty = 0)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const deleteItemRef = useRef<ItemRow | null>(null);
+
   useEffect(() => {
     if (!code) return;
 
@@ -88,12 +108,20 @@ export default function BoxPage() {
       const boxesRes = await supabase.from("boxes").select("id, code").order("code");
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
 
-      // reset move mode state when loading a box
+      // reset move mode state
       setMoveMode(false);
       const empty = new Set<string>();
       setSelectedIds(empty);
       selectedRef.current = empty;
       setBulkDestBoxId("");
+
+      // close modals
+      setNewBoxOpen(false);
+      setConfirmMoveOpen(false);
+      setConfirmDeleteOpen(false);
+      setNewBoxName("");
+      confirmMoveInfoRef.current = null;
+      deleteItemRef.current = null;
 
       setLoading(false);
     }
@@ -111,11 +139,6 @@ export default function BoxPage() {
     setItems(data ?? []);
   }
 
-  async function refreshBoxes() {
-    const boxesRes = await supabase.from("boxes").select("id, code").order("code");
-    setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
-  }
-
   function getStoragePathFromPublicUrl(url: string) {
     const marker = "/item-photos/";
     const idx = url.indexOf(marker);
@@ -124,6 +147,9 @@ export default function BoxPage() {
   }
 
   async function deleteItemAndPhoto(item: ItemRow) {
+    setBusy(true);
+    setError(null);
+
     if (item.photo_url) {
       const path = getStoragePathFromPublicUrl(item.photo_url);
       if (path) {
@@ -131,17 +157,23 @@ export default function BoxPage() {
       }
     }
 
-    await supabase.from("items").delete().eq("id", item.id);
+    const delRes = await supabase.from("items").delete().eq("id", item.id);
+    if (delRes.error) {
+      setError(delRes.error.message);
+      setBusy(false);
+      return;
+    }
 
     setItems((prev) => prev.filter((i) => i.id !== item.id));
 
-    // also remove from selection if in move mode
     setSelectedIds((prev) => {
       const copy = new Set(prev);
       copy.delete(item.id);
       selectedRef.current = copy;
       return copy;
     });
+
+    setBusy(false);
   }
 
   async function saveQuantity(itemId: string, qty: number) {
@@ -150,12 +182,9 @@ export default function BoxPage() {
     if (!item) return;
 
     if (safeQty === 0) {
-      const ok = window.confirm(`Quantity is 0.\n\nDelete "${item.name}" from this box?`);
-      if (ok) {
-        await deleteItemAndPhoto(item);
-      } else if (box) {
-        await reloadItems(box.id);
-      }
+      // open in-app confirm modal
+      deleteItemRef.current = item;
+      setConfirmDeleteOpen(true);
       return;
     }
 
@@ -214,10 +243,11 @@ export default function BoxPage() {
     selectedRef.current = empty;
   }
 
-  async function createNewBoxFromMove() {
-    // only ask for name; code is auto
-    const name = window.prompt(`New box name (optional)\n\nCode will be: ${nextAutoCode}`, "");
-    if (name === null) return; // user cancelled
+  async function createNewBoxFromMove(name: string) {
+    if (!name.trim()) {
+      setError("Box name is required.");
+      return null;
+    }
 
     setBusy(true);
     setError(null);
@@ -226,7 +256,7 @@ export default function BoxPage() {
       .from("boxes")
       .insert({
         code: nextAutoCode,
-        name: name.trim() || null,
+        name: name.trim(),
         location: null,
       })
       .select("id, code")
@@ -235,10 +265,10 @@ export default function BoxPage() {
     if (insertRes.error || !insertRes.data) {
       setError(insertRes.error?.message || "Failed to create new box.");
       setBusy(false);
-      return;
+      return null;
     }
 
-    // Update local boxes list + set destination to the new box
+    // Update boxes list + set destination to the new box
     setAllBoxes((prev) => {
       const next = [...prev, { id: insertRes.data.id, code: insertRes.data.code }];
       next.sort((a, b) => a.code.localeCompare(b.code));
@@ -248,41 +278,60 @@ export default function BoxPage() {
     setBulkDestBoxId(insertRes.data.id);
 
     setBusy(false);
+    return insertRes.data;
   }
 
   async function onDestinationChange(value: string) {
     if (value === "__new__") {
-      // reset selection back to blank while we create
       setBulkDestBoxId("");
-      await createNewBoxFromMove();
+      setNewBoxName("");
+      setNewBoxOpen(true);
       return;
     }
     setBulkDestBoxId(value);
   }
 
-  async function moveSelected() {
+  function requestMoveSelected() {
     if (!box) return;
 
     const ids = Array.from(selectedRef.current);
     if (ids.length === 0) {
-      alert("Select at least one item.");
+      setError("Select at least one item.");
       return;
     }
     if (!bulkDestBoxId) {
-      alert("Choose a destination box.");
+      setError("Choose a destination box.");
       return;
     }
 
     const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
-    const ok = window.confirm(
-      `Move ${ids.length} item(s) from ${box.code} to ${dest?.code ?? "destination"}?`
-    );
-    if (!ok) return;
+    const toCode = dest?.code ?? "destination";
+
+    confirmMoveInfoRef.current = {
+      count: ids.length,
+      fromCode: box.code,
+      toId: bulkDestBoxId,
+      toCode,
+      itemIds: ids,
+    };
+
+    setConfirmMoveOpen(true);
+  }
+
+  async function confirmMoveSelected() {
+    if (!box) return;
+
+    const info = confirmMoveInfoRef.current;
+    if (!info) return;
 
     setBusy(true);
     setError(null);
 
-    const res = await supabase.from("items").update({ box_id: bulkDestBoxId }).in("id", ids);
+    const res = await supabase
+      .from("items")
+      .update({ box_id: info.toId })
+      .in("id", info.itemIds);
+
     if (res.error) {
       setError(res.error.message);
       setBusy(false);
@@ -292,8 +341,11 @@ export default function BoxPage() {
     // remove moved items from this box list
     setItems((prev) => prev.filter((i) => !selectedRef.current.has(i.id)));
 
-    // leave move mode
+    // exit move mode
+    setConfirmMoveOpen(false);
+    confirmMoveInfoRef.current = null;
     exitMoveMode();
+
     setBusy(false);
   }
 
@@ -352,7 +404,7 @@ export default function BoxPage() {
         {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
       </div>
 
-      {/* Move Mode Panel (only when active) */}
+      {/* Move Mode Panel */}
       {moveMode && (
         <div
           style={{
@@ -367,21 +419,19 @@ export default function BoxPage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ margin: 0 }}>Move items</h2>
-              <div style={{ opacity: 0.85 }}>
-                Select items, choose a destination box, then move.
-              </div>
+              <div style={{ opacity: 0.85 }}>Select items, choose a destination box, then move.</div>
             </div>
 
-            <button type="button" onClick={exitMoveMode}>
+            <button type="button" onClick={exitMoveMode} disabled={busy}>
               Done
             </button>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <button type="button" onClick={selectAll} disabled={items.length === 0}>
+            <button type="button" onClick={selectAll} disabled={items.length === 0 || busy}>
               Select all
             </button>
-            <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0}>
+            <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0 || busy}>
               Clear
             </button>
             <div style={{ alignSelf: "center", opacity: 0.85 }}>
@@ -390,7 +440,7 @@ export default function BoxPage() {
           </div>
 
           <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-            <select value={bulkDestBoxId} onChange={(e) => onDestinationChange(e.target.value)}>
+            <select value={bulkDestBoxId} onChange={(e) => onDestinationChange(e.target.value)} disabled={busy}>
               <option value="">Select destination box…</option>
               <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
               {destinationBoxes.map((b) => (
@@ -402,14 +452,12 @@ export default function BoxPage() {
 
             <button
               type="button"
-              onClick={moveSelected}
+              onClick={requestMoveSelected}
               disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
               style={{ background: "#111", color: "#fff" }}
             >
               {busy ? "Working..." : "Move selected"}
             </button>
-
-            {busy && <div style={{ opacity: 0.8 }}>Please wait…</div>}
           </div>
         </div>
       )}
@@ -468,7 +516,7 @@ export default function BoxPage() {
               {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)}>
+                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)} disabled={busy}>
                   −
                 </button>
 
@@ -481,13 +529,14 @@ export default function BoxPage() {
                     setItems((prev) => prev.map((it) => (it.id === i.id ? { ...it, quantity: n } : it)));
                   }}
                   style={{ width: 110 }}
+                  disabled={busy}
                 />
 
-                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) + 1)}>
+                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) + 1)} disabled={busy}>
                   +
                 </button>
 
-                <button type="button" onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
+                <button type="button" onClick={() => saveQuantity(i.id, i.quantity ?? 0)} disabled={busy}>
                   Save
                 </button>
               </div>
@@ -531,7 +580,7 @@ export default function BoxPage() {
         </svg>
       </a>
 
-      {/* Floating Move FAB (swap icon) */}
+      {/* Floating Move FAB */}
       <button
         type="button"
         onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
@@ -553,6 +602,7 @@ export default function BoxPage() {
           cursor: "pointer",
         }}
         title={moveMode ? "Exit move mode" : "Move items"}
+        disabled={busy}
       >
         <svg
           width="28"
@@ -593,10 +643,234 @@ export default function BoxPage() {
           <img
             src={viewItem.photo_url}
             alt={viewItem.name}
-            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              borderRadius: 16,
+            }}
           />
         </div>
       )}
+
+      {/* ========= MODALS ========= */}
+
+      {/* Create new box modal */}
+      <Modal
+        open={newBoxOpen}
+        title={`Create new box (${nextAutoCode})`}
+        onClose={() => {
+          if (busy) return;
+          setNewBoxOpen(false);
+          setNewBoxName("");
+        }}
+      >
+        <p style={{ marginTop: 0, opacity: 0.85 }}>
+          Enter a name for the new box. The code is auto-assigned.
+        </p>
+
+        <input
+          placeholder="Box name"
+          value={newBoxName}
+          onChange={(e) => setNewBoxName(e.target.value)}
+          autoFocus
+        />
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (busy) return;
+              setNewBoxOpen(false);
+              setNewBoxName("");
+            }}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              const created = await createNewBoxFromMove(newBoxName);
+              if (created) {
+                setNewBoxOpen(false);
+                setNewBoxName("");
+              }
+            }}
+            disabled={busy || !newBoxName.trim()}
+            style={{ background: "#111", color: "#fff" }}
+          >
+            {busy ? "Creating..." : "Create box"}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Confirm move modal */}
+      <Modal
+        open={confirmMoveOpen}
+        title="Confirm move"
+        onClose={() => {
+          if (busy) return;
+          setConfirmMoveOpen(false);
+          confirmMoveInfoRef.current = null;
+        }}
+      >
+        {(() => {
+          const info = confirmMoveInfoRef.current;
+          if (!info) return <p>Missing move info.</p>;
+
+          return (
+            <>
+              <p style={{ marginTop: 0 }}>
+                Move <strong>{info.count}</strong> item(s) from{" "}
+                <strong>{info.fromCode}</strong> to <strong>{info.toCode}</strong>?
+              </p>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (busy) return;
+                    setConfirmMoveOpen(false);
+                    confirmMoveInfoRef.current = null;
+                  }}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={confirmMoveSelected}
+                  disabled={busy}
+                  style={{ background: "#111", color: "#fff" }}
+                >
+                  {busy ? "Moving..." : "Yes, move"}
+                </button>
+              </div>
+            </>
+          );
+        })()}
+      </Modal>
+
+      {/* Confirm delete modal */}
+      <Modal
+        open={confirmDeleteOpen}
+        title="Delete item?"
+        onClose={() => {
+          if (busy) return;
+          setConfirmDeleteOpen(false);
+          deleteItemRef.current = null;
+        }}
+      >
+        <p style={{ marginTop: 0 }}>
+          Quantity is 0. Delete{" "}
+          <strong>{deleteItemRef.current?.name ?? "this item"}</strong> from this box (and remove the photo)?
+        </p>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (busy) return;
+              setConfirmDeleteOpen(false);
+              deleteItemRef.current = null;
+              if (box) reloadItems(box.id); // revert any UI qty changes
+            }}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              const item = deleteItemRef.current;
+              if (!item) return;
+              setConfirmDeleteOpen(false);
+              deleteItemRef.current = null;
+              await deleteItemAndPhoto(item);
+            }}
+            disabled={busy}
+            style={{ background: "#ef4444", color: "#fff" }}
+          >
+            {busy ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </Modal>
     </main>
+  );
+}
+
+/* ================= MODAL COMPONENT ================= */
+
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        // click outside closes
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 4000,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        padding: 12,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          background: "#fff",
+          borderRadius: 18,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+          padding: 14,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <h3 style={{ margin: 0 }}>{title}</h3>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              borderRadius: 999,
+              width: 40,
+              height: 40,
+              padding: 0,
+              lineHeight: "40px",
+              textAlign: "center",
+              fontWeight: 900,
+            }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>{children}</div>
+      </div>
+    </div>
   );
 }
