@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabaseClient";
 
+/* ================= TYPES ================= */
+
 type BoxRow = {
   id: string;
   code: string;
@@ -25,6 +27,8 @@ type ItemRow = {
   quantity: number | null;
 };
 
+/* ================= PAGE ================= */
+
 export default function BoxPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code ? decodeURIComponent(String(params.code)) : "";
@@ -37,13 +41,15 @@ export default function BoxPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
 
-  // Bulk move
+  /* Bulk move */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkDestBoxId, setBulkDestBoxId] = useState<string>("");
+  const [bulkDestBoxId, setBulkDestBoxId] = useState("");
   const selectedRef = useRef<Set<string>>(new Set());
 
-  // Full screen viewer
+  /* Fullscreen photo viewer */
   const [viewItem, setViewItem] = useState<ItemRow | null>(null);
+
+  /* ================= LOAD ================= */
 
   useEffect(() => {
     if (!code) return;
@@ -74,7 +80,11 @@ export default function BoxPage() {
 
       setItems(itemsRes.data ?? []);
 
-      const boxesRes = await supabase.from("boxes").select("id, code").order("code");
+      const boxesRes = await supabase
+        .from("boxes")
+        .select("id, code")
+        .order("code");
+
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
 
       const empty = new Set<string>();
@@ -98,6 +108,8 @@ export default function BoxPage() {
     setItems(data ?? []);
   }
 
+  /* ================= DELETE HELPERS ================= */
+
   function getStoragePathFromPublicUrl(url: string) {
     const marker = "/item-photos/";
     const idx = url.indexOf(marker);
@@ -113,11 +125,7 @@ export default function BoxPage() {
       }
     }
 
-    const delRes = await supabase.from("items").delete().eq("id", item.id);
-    if (delRes.error) {
-      setError(delRes.error.message);
-      return;
-    }
+    await supabase.from("items").delete().eq("id", item.id);
 
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     setSelectedIds((prev) => {
@@ -128,13 +136,17 @@ export default function BoxPage() {
     });
   }
 
+  /* ================= QUANTITY ================= */
+
   async function saveQuantity(itemId: string, qty: number) {
     const safeQty = Math.max(0, Math.floor(qty));
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
 
     if (safeQty === 0) {
-      const ok = window.confirm(`Quantity is 0.\n\nDelete "${item.name}" from this box?`);
+      const ok = window.confirm(
+        `Quantity is 0.\n\nDelete "${item.name}" from this box?`
+      );
       if (ok) {
         await deleteItemAndPhoto(item);
       } else if (box) {
@@ -143,20 +155,24 @@ export default function BoxPage() {
       return;
     }
 
-    const res = await supabase.from("items").update({ quantity: safeQty }).eq("id", itemId);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
+    await supabase
+      .from("items")
+      .update({ quantity: safeQty })
+      .eq("id", itemId);
 
-    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantity: safeQty } : i)));
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, quantity: safeQty } : i
+      )
+    );
   }
+
+  /* ================= BULK MOVE ================= */
 
   function toggleSelected(itemId: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+      next.has(itemId) ? next.delete(itemId) : next.add(itemId);
       selectedRef.current = next;
       return next;
     });
@@ -178,55 +194,37 @@ export default function BoxPage() {
     if (!box) return;
 
     const ids = Array.from(selectedRef.current);
-    if (ids.length === 0) {
-      alert("Tick at least one item first.");
-      return;
-    }
-    if (!bulkDestBoxId) {
-      alert("Choose a destination box first.");
-      return;
-    }
+    if (!ids.length || !bulkDestBoxId) return;
 
     const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
     const ok = window.confirm(
-      `Move ${ids.length} item(s) from ${box.code} to ${dest?.code ?? "the selected box"}?`
+      `Move ${ids.length} item(s) from ${box.code} to ${dest?.code}?`
     );
     if (!ok) return;
 
     setBusy(true);
-    setError(null);
 
-    const res = await supabase.from("items").update({ box_id: bulkDestBoxId }).in("id", ids);
-    if (res.error) {
-      setError(res.error.message);
-      setBusy(false);
-      return;
-    }
+    await supabase
+      .from("items")
+      .update({ box_id: bulkDestBoxId })
+      .in("id", ids);
 
-    setItems((prev) => prev.filter((i) => !selectedRef.current.has(i.id)));
+    setItems((prev) =>
+      prev.filter((i) => !selectedRef.current.has(i.id))
+    );
+
     clearSelected();
     setBulkDestBoxId("");
     setBusy(false);
   }
 
-  async function uploadPhoto(itemId: string, file: File) {
-    const ext = file.name.split(".").pop() || "jpg";
-    const fileName = `${itemId}-${Date.now()}.${ext}`;
+  /* ================= PRINT QR ================= */
 
-    const upload = await supabase.storage.from("item-photos").upload(fileName, file, { upsert: true });
-    if (upload.error) {
-      setError(upload.error.message);
-      return;
-    }
-
-    const publicUrl = supabase.storage.from("item-photos").getPublicUrl(fileName).data.publicUrl;
-
-    await supabase.from("items").update({ photo_url: publicUrl }).eq("id", itemId);
-
-    if (box) await reloadItems(box.id);
-  }
-
-  async function printSingleQrLabel(boxCode: string, name?: string | null, location?: string | null) {
+  async function printSingleQrLabel(
+    boxCode: string,
+    name?: string | null,
+    location?: string | null
+  ) {
     const url = `${window.location.origin}/box/${encodeURIComponent(boxCode)}`;
     const qr = await QRCode.toDataURL(url, { width: 420 });
 
@@ -249,220 +247,122 @@ export default function BoxPage() {
     `);
   }
 
+  /* ================= RENDER ================= */
+
   if (loading) return <p>Loading…</p>;
   if (!box) return <p>Box not found.</p>;
 
   const destinationBoxes = allBoxes.filter((b) => b.id !== box.id);
-  const selectedCount = selectedIds.size;
 
   return (
     <main style={{ paddingBottom: 90 }}>
-      {/* Header card */}
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 18,
-          padding: 14,
-          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      {/* Header */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
-            {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
-            {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
+            <h1>{box.code}</h1>
+            {box.name && <div><strong>{box.name}</strong></div>}
+            {box.location && <div>Location: {box.location}</div>}
           </div>
 
-          <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)} className="full-width-mobile">
-            Print QR label
+          <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>
+            Print QR
           </button>
         </div>
 
-        {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
+        {error && <p style={{ color: "crimson" }}>{error}</p>}
       </div>
 
-      {/* Bulk move card */}
-      <div
-        style={{
-          marginTop: 12,
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 18,
-          padding: 14,
-          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-        }}
-      >
-        <h2 style={{ margin: "0 0 10px 0" }}>Move selected items</h2>
+      {/* Bulk move */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <h2>Move selected</h2>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <button type="button" onClick={selectAll} disabled={items.length === 0}>
-            Select all
-          </button>
-          <button type="button" onClick={clearSelected} disabled={selectedCount === 0}>
-            Clear
-          </button>
-
-          <div style={{ alignSelf: "center", opacity: 0.85 }}>
-            Selected: <strong>{selectedCount}</strong>
-          </div>
+          <button onClick={selectAll}>Select all</button>
+          <button onClick={clearSelected}>Clear</button>
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
-          <select value={bulkDestBoxId} onChange={(e) => setBulkDestBoxId(e.target.value)}>
-            <option value="">Select destination box…</option>
-            {destinationBoxes.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.code}
-              </option>
-            ))}
-          </select>
+        <select
+          value={bulkDestBoxId}
+          onChange={(e) => setBulkDestBoxId(e.target.value)}
+        >
+          <option value="">Select destination box…</option>
+          {destinationBoxes.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.code}
+            </option>
+          ))}
+        </select>
 
-          <button onClick={moveSelected} disabled={busy || selectedCount === 0 || !bulkDestBoxId}>
-            {busy ? "Moving..." : "Move selected"}
-          </button>
-        </div>
+        <button
+          onClick={moveSelected}
+          disabled={!selectedIds.size || !bulkDestBoxId || busy}
+          style={{ marginTop: 10 }}
+        >
+          Move selected
+        </button>
       </div>
 
       {/* Items */}
-      <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
+      <h2 style={{ marginTop: 16 }}>Items</h2>
 
       <div style={{ display: "grid", gap: 10 }}>
-        {items.map((i) => {
-          const checked = selectedIds.has(i.id);
-          const hasPhoto = Boolean(i.photo_url);
+        {items.map((i) => (
+          <div key={i.id} className="card">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(i.id)}
+                onChange={() => toggleSelected(i.id)}
+              />
 
-          return (
-            <div
-              key={i.id}
-              style={{
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 18,
-                padding: 14,
-                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleSelected(i.id)}
-                  style={{ transform: "scale(1.25)" }}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (hasPhoto) setViewItem(i);
-                  }}
-                  disabled={!hasPhoto}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    boxShadow: "none",
-                    textAlign: "left",
-                    fontWeight: 900,
-                    cursor: hasPhoto ? "pointer" : "default",
-                    opacity: hasPhoto ? 1 : 0.9,
-                  }}
-                  title={hasPhoto ? "Tap to view photo" : "No photo yet"}
-                >
-                  {i.name}
-                  {hasPhoto ? <span style={{ marginLeft: 8, opacity: 0.6 }}>📷</span> : null}
-                </button>
-              </div>
-
-              {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
-
-              {/* Quantity editor */}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setItems((prev) =>
-                      prev.map((it) =>
-                        it.id === i.id ? { ...it, quantity: Math.max(0, (it.quantity ?? 0) - 1) } : it
-                      )
-                    )
-                  }
-                >
-                  −
-                </button>
-
-                <input
-                  type="number"
-                  min={0}
-                  value={i.quantity ?? 0}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((it) => (it.id === i.id ? { ...it, quantity: Number(e.target.value) } : it))
-                    )
-                  }
-                  style={{ width: 110 }}
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setItems((prev) =>
-                      prev.map((it) => (it.id === i.id ? { ...it, quantity: (it.quantity ?? 0) + 1 } : it))
-                    )
-                  }
-                >
-                  +
-                </button>
-
-                <button type="button" onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
-                  Save
-                </button>
-              </div>
-
-              {/* Photo upload */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ marginBottom: 8, opacity: 0.85 }}>Add / change photo:</div>
-
-                <input
-                  id={`cam-${i.id}`}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadPhoto(i.id, file);
-                    e.currentTarget.value = "";
-                  }}
-                />
-
-                <input
-                  id={`file-${i.id}`}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadPhoto(i.id, file);
-                    e.currentTarget.value = "";
-                  }}
-                />
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => document.getElementById(`cam-${i.id}`)?.click()}>
-                    Take photo
-                  </button>
-                  <button type="button" onClick={() => document.getElementById(`file-${i.id}`)?.click()}>
-                    Choose file
-                  </button>
-                </div>
-              </div>
+              <button
+                onClick={() => i.photo_url && setViewItem(i)}
+                disabled={!i.photo_url}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontWeight: 900,
+                  textAlign: "left",
+                }}
+              >
+                {i.name}
+                {i.photo_url && <span style={{ marginLeft: 6 }}>📷</span>}
+              </button>
             </div>
-          );
-        })}
+
+            {i.description && <div>{i.description}</div>}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)}>−</button>
+
+              <input
+                type="number"
+                min={0}
+                value={i.quantity ?? 0}
+                onChange={(e) =>
+                  setItems((prev) =>
+                    prev.map((it) =>
+                      it.id === i.id
+                        ? { ...it, quantity: Number(e.target.value) }
+                        : it
+                    )
+                  )
+                }
+                style={{ width: 90 }}
+              />
+
+              <button onClick={() => saveQuantity(i.id, (i.quantity ?? 0) + 1)}>+</button>
+
+              <button onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
+                Save
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Floating Add Item SVG button */}
+      {/* Floating Add Item FAB */}
       <a
         href={`/box/${encodeURIComponent(box.code)}/new-item`}
         aria-label="Add item"
@@ -477,7 +377,6 @@ export default function BoxPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          textDecoration: "none",
           boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
           zIndex: 2000,
         }}
@@ -497,7 +396,7 @@ export default function BoxPage() {
         </svg>
       </a>
 
-      {/* Full screen photo viewer */}
+      {/* Fullscreen photo viewer */}
       {viewItem && viewItem.photo_url && (
         <div
           onClick={() => setViewItem(null)}
@@ -509,18 +408,12 @@ export default function BoxPage() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 3000,
-            padding: 12,
           }}
         >
           <img
             src={viewItem.photo_url}
             alt={viewItem.name}
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-              borderRadius: 16,
-            }}
+            style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 16 }}
           />
         </div>
       )}
