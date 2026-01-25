@@ -163,29 +163,39 @@ export default function BoxesPage() {
 
       {/* Floating + bubble */}
       <a
-        href="/boxes/new"
-        aria-label="Create new box"
-        style={{
-          position: "fixed",
-          right: 18,
-          bottom: 18,
-          width: 58,
-          height: 58,
-          borderRadius: 999,
-          background: "#111",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textDecoration: "none",
-          fontSize: 34,
-          fontWeight: 900,
-          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
-          zIndex: 2000,
-        }}
-      >
-        +
-      </a>
+  href="/boxes/new"
+  aria-label="Create new box"
+  style={{
+    position: "fixed",
+    right: 18,
+    bottom: 18,
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    background: "#111",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
+    boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
+    zIndex: 2000,
+  }}
+>
+  <svg
+    width="26"
+    height="26"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="white"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+</a>
+
     </main>
   );
 }
