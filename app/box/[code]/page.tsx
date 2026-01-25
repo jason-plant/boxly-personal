@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabaseClient";
@@ -24,6 +24,16 @@ type ItemRow = {
   photo_url: string | null;
   quantity: number | null;
 };
+
+function pad3(n: number) {
+  return String(n).padStart(3, "0");
+}
+function parseBoxNumber(code: string): number | null {
+  const m = /^BOX-(\d{3})$/i.exec(code.trim());
+  if (!m) return null;
+  const num = Number(m[1]);
+  return Number.isFinite(num) ? num : null;
+}
 
 export default function BoxPage() {
   const params = useParams<{ code?: string }>();
@@ -101,6 +111,11 @@ export default function BoxPage() {
     setItems(data ?? []);
   }
 
+  async function refreshBoxes() {
+    const boxesRes = await supabase.from("boxes").select("id, code").order("code");
+    setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
+  }
+
   function getStoragePathFromPublicUrl(url: string) {
     const marker = "/item-photos/";
     const idx = url.indexOf(marker);
@@ -153,6 +168,15 @@ export default function BoxPage() {
 
   /* ========= MOVE MODE HELPERS ========= */
 
+  const nextAutoCode = useMemo(() => {
+    let max = 0;
+    for (const b of allBoxes) {
+      const n = parseBoxNumber(b.code);
+      if (n !== null && n > max) max = n;
+    }
+    return `BOX-${pad3(max + 1)}`;
+  }, [allBoxes]);
+
   function enterMoveMode() {
     setMoveMode(true);
     const empty = new Set<string>();
@@ -188,6 +212,52 @@ export default function BoxPage() {
     const empty = new Set<string>();
     setSelectedIds(empty);
     selectedRef.current = empty;
+  }
+
+  async function createNewBoxFromMove() {
+    // only ask for name; code is auto
+    const name = window.prompt(`New box name (optional)\n\nCode will be: ${nextAutoCode}`, "");
+    if (name === null) return; // user cancelled
+
+    setBusy(true);
+    setError(null);
+
+    const insertRes = await supabase
+      .from("boxes")
+      .insert({
+        code: nextAutoCode,
+        name: name.trim() || null,
+        location: null,
+      })
+      .select("id, code")
+      .single();
+
+    if (insertRes.error || !insertRes.data) {
+      setError(insertRes.error?.message || "Failed to create new box.");
+      setBusy(false);
+      return;
+    }
+
+    // Update local boxes list + set destination to the new box
+    setAllBoxes((prev) => {
+      const next = [...prev, { id: insertRes.data.id, code: insertRes.data.code }];
+      next.sort((a, b) => a.code.localeCompare(b.code));
+      return next;
+    });
+
+    setBulkDestBoxId(insertRes.data.id);
+
+    setBusy(false);
+  }
+
+  async function onDestinationChange(value: string) {
+    if (value === "__new__") {
+      // reset selection back to blank while we create
+      setBulkDestBoxId("");
+      await createNewBoxFromMove();
+      return;
+    }
+    setBulkDestBoxId(value);
   }
 
   async function moveSelected() {
@@ -297,7 +367,9 @@ export default function BoxPage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ margin: 0 }}>Move items</h2>
-              <div style={{ opacity: 0.85 }}>Select items, choose a destination box, then move.</div>
+              <div style={{ opacity: 0.85 }}>
+                Select items, choose a destination box, then move.
+              </div>
             </div>
 
             <button type="button" onClick={exitMoveMode}>
@@ -318,8 +390,9 @@ export default function BoxPage() {
           </div>
 
           <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-            <select value={bulkDestBoxId} onChange={(e) => setBulkDestBoxId(e.target.value)}>
+            <select value={bulkDestBoxId} onChange={(e) => onDestinationChange(e.target.value)}>
               <option value="">Select destination box…</option>
+              <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
               {destinationBoxes.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.code}
@@ -333,8 +406,10 @@ export default function BoxPage() {
               disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
               style={{ background: "#111", color: "#fff" }}
             >
-              {busy ? "Moving..." : "Move selected"}
+              {busy ? "Working..." : "Move selected"}
             </button>
+
+            {busy && <div style={{ opacity: 0.8 }}>Please wait…</div>}
           </div>
         </div>
       )}
@@ -358,7 +433,6 @@ export default function BoxPage() {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {/* Checkbox only visible in move mode */}
                 {moveMode && (
                   <input
                     type="checkbox"
@@ -368,7 +442,6 @@ export default function BoxPage() {
                   />
                 )}
 
-                {/* Name tap opens photo (if exists). In move mode, name still works. */}
                 <button
                   type="button"
                   onClick={() => {
@@ -394,7 +467,6 @@ export default function BoxPage() {
 
               {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
 
-              {/* Quantity */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                 <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)}>
                   −
@@ -467,7 +539,7 @@ export default function BoxPage() {
         style={{
           position: "fixed",
           right: 18,
-          bottom: 86, // sits above the + button
+          bottom: 86,
           width: 58,
           height: 58,
           borderRadius: 999,
@@ -482,7 +554,6 @@ export default function BoxPage() {
         }}
         title={moveMode ? "Exit move mode" : "Move items"}
       >
-        {/* Two boxes with circular arrow */}
         <svg
           width="28"
           height="28"
@@ -493,14 +564,11 @@ export default function BoxPage() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          {/* boxes */}
           <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
           <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
-          {/* circular arrows */}
           <path d="M7 5.5c2.5-2 6.5-2 9 0" />
           <path d="M16 5.5h-3" />
           <path d="M17 5.5v3" />
-
           <path d="M17 18.5c-2.5 2-6.5 2-9 0" />
           <path d="M7 18.5h3" />
           <path d="M7 18.5v-3" />
