@@ -5,8 +5,6 @@ import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabaseClient";
 
-/* ================= TYPES ================= */
-
 type BoxRow = {
   id: string;
   code: string;
@@ -27,8 +25,6 @@ type ItemRow = {
   quantity: number | null;
 };
 
-/* ================= PAGE ================= */
-
 export default function BoxPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code ? decodeURIComponent(String(params.code)) : "";
@@ -41,15 +37,14 @@ export default function BoxPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
 
-  /* Bulk move */
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkDestBoxId, setBulkDestBoxId] = useState("");
-  const selectedRef = useRef<Set<string>>(new Set());
-
-  /* Fullscreen photo viewer */
+  // Photo viewer
   const [viewItem, setViewItem] = useState<ItemRow | null>(null);
 
-  /* ================= LOAD ================= */
+  // Move mode
+  const [moveMode, setMoveMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectedRef = useRef<Set<string>>(new Set());
+  const [bulkDestBoxId, setBulkDestBoxId] = useState("");
 
   useEffect(() => {
     if (!code) return;
@@ -80,13 +75,11 @@ export default function BoxPage() {
 
       setItems(itemsRes.data ?? []);
 
-      const boxesRes = await supabase
-        .from("boxes")
-        .select("id, code")
-        .order("code");
-
+      const boxesRes = await supabase.from("boxes").select("id, code").order("code");
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
 
+      // reset move mode state when loading a box
+      setMoveMode(false);
       const empty = new Set<string>();
       setSelectedIds(empty);
       selectedRef.current = empty;
@@ -108,8 +101,6 @@ export default function BoxPage() {
     setItems(data ?? []);
   }
 
-  /* ================= DELETE HELPERS ================= */
-
   function getStoragePathFromPublicUrl(url: string) {
     const marker = "/item-photos/";
     const idx = url.indexOf(marker);
@@ -128,6 +119,8 @@ export default function BoxPage() {
     await supabase.from("items").delete().eq("id", item.id);
 
     setItems((prev) => prev.filter((i) => i.id !== item.id));
+
+    // also remove from selection if in move mode
     setSelectedIds((prev) => {
       const copy = new Set(prev);
       copy.delete(item.id);
@@ -136,17 +129,13 @@ export default function BoxPage() {
     });
   }
 
-  /* ================= QUANTITY ================= */
-
   async function saveQuantity(itemId: string, qty: number) {
     const safeQty = Math.max(0, Math.floor(qty));
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
 
     if (safeQty === 0) {
-      const ok = window.confirm(
-        `Quantity is 0.\n\nDelete "${item.name}" from this box?`
-      );
+      const ok = window.confirm(`Quantity is 0.\n\nDelete "${item.name}" from this box?`);
       if (ok) {
         await deleteItemAndPhoto(item);
       } else if (box) {
@@ -155,19 +144,30 @@ export default function BoxPage() {
       return;
     }
 
-    await supabase
-      .from("items")
-      .update({ quantity: safeQty })
-      .eq("id", itemId);
+    await supabase.from("items").update({ quantity: safeQty }).eq("id", itemId);
 
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === itemId ? { ...i, quantity: safeQty } : i
-      )
+      prev.map((i) => (i.id === itemId ? { ...i, quantity: safeQty } : i))
     );
   }
 
-  /* ================= BULK MOVE ================= */
+  /* ========= MOVE MODE HELPERS ========= */
+
+  function enterMoveMode() {
+    setMoveMode(true);
+    const empty = new Set<string>();
+    setSelectedIds(empty);
+    selectedRef.current = empty;
+    setBulkDestBoxId("");
+  }
+
+  function exitMoveMode() {
+    setMoveMode(false);
+    const empty = new Set<string>();
+    setSelectedIds(empty);
+    selectedRef.current = empty;
+    setBulkDestBoxId("");
+  }
 
   function toggleSelected(itemId: string) {
     setSelectedIds((prev) => {
@@ -194,37 +194,40 @@ export default function BoxPage() {
     if (!box) return;
 
     const ids = Array.from(selectedRef.current);
-    if (!ids.length || !bulkDestBoxId) return;
+    if (ids.length === 0) {
+      alert("Select at least one item.");
+      return;
+    }
+    if (!bulkDestBoxId) {
+      alert("Choose a destination box.");
+      return;
+    }
 
     const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
     const ok = window.confirm(
-      `Move ${ids.length} item(s) from ${box.code} to ${dest?.code}?`
+      `Move ${ids.length} item(s) from ${box.code} to ${dest?.code ?? "destination"}?`
     );
     if (!ok) return;
 
     setBusy(true);
+    setError(null);
 
-    await supabase
-      .from("items")
-      .update({ box_id: bulkDestBoxId })
-      .in("id", ids);
+    const res = await supabase.from("items").update({ box_id: bulkDestBoxId }).in("id", ids);
+    if (res.error) {
+      setError(res.error.message);
+      setBusy(false);
+      return;
+    }
 
-    setItems((prev) =>
-      prev.filter((i) => !selectedRef.current.has(i.id))
-    );
+    // remove moved items from this box list
+    setItems((prev) => prev.filter((i) => !selectedRef.current.has(i.id)));
 
-    clearSelected();
-    setBulkDestBoxId("");
+    // leave move mode
+    exitMoveMode();
     setBusy(false);
   }
 
-  /* ================= PRINT QR ================= */
-
-  async function printSingleQrLabel(
-    boxCode: string,
-    name?: string | null,
-    location?: string | null
-  ) {
+  async function printSingleQrLabel(boxCode: string, name?: string | null, location?: string | null) {
     const url = `${window.location.origin}/box/${encodeURIComponent(boxCode)}`;
     const qr = await QRCode.toDataURL(url, { width: 420 });
 
@@ -247,22 +250,28 @@ export default function BoxPage() {
     `);
   }
 
-  /* ================= RENDER ================= */
-
   if (loading) return <p>Loading…</p>;
   if (!box) return <p>Box not found.</p>;
 
   const destinationBoxes = allBoxes.filter((b) => b.id !== box.id);
 
   return (
-    <main style={{ paddingBottom: 90 }}>
+    <main style={{ paddingBottom: 110 }}>
       {/* Header */}
-      <div className="card">
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 18,
+          padding: 14,
+          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+        }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h1>{box.code}</h1>
-            {box.name && <div><strong>{box.name}</strong></div>}
-            {box.location && <div>Location: {box.location}</div>}
+            <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
+            {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
+            {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
           </div>
 
           <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>
@@ -270,96 +279,149 @@ export default function BoxPage() {
           </button>
         </div>
 
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
+        {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
       </div>
 
-      {/* Bulk move */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <h2>Move selected</h2>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <button onClick={selectAll}>Select all</button>
-          <button onClick={clearSelected}>Clear</button>
-        </div>
-
-        <select
-          value={bulkDestBoxId}
-          onChange={(e) => setBulkDestBoxId(e.target.value)}
+      {/* Move Mode Panel (only when active) */}
+      {moveMode && (
+        <div
+          style={{
+            marginTop: 12,
+            background: "#fff",
+            border: "2px solid #111",
+            borderRadius: 18,
+            padding: 14,
+            boxShadow: "0 1px 10px rgba(0,0,0,0.10)",
+          }}
         >
-          <option value="">Select destination box…</option>
-          {destinationBoxes.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.code}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={moveSelected}
-          disabled={!selectedIds.size || !bulkDestBoxId || busy}
-          style={{ marginTop: 10 }}
-        >
-          Move selected
-        </button>
-      </div>
-
-      {/* Items */}
-      <h2 style={{ marginTop: 16 }}>Items</h2>
-
-      <div style={{ display: "grid", gap: 10 }}>
-        {items.map((i) => (
-          <div key={i.id} className="card">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <input
-                type="checkbox"
-                checked={selectedIds.has(i.id)}
-                onChange={() => toggleSelected(i.id)}
-              />
-
-              <button
-                onClick={() => i.photo_url && setViewItem(i)}
-                disabled={!i.photo_url}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontWeight: 900,
-                  textAlign: "left",
-                }}
-              >
-                {i.name}
-                {i.photo_url && <span style={{ marginLeft: 6 }}>📷</span>}
-              </button>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Move items</h2>
+              <div style={{ opacity: 0.85 }}>Select items, choose a destination box, then move.</div>
             </div>
 
-            {i.description && <div>{i.description}</div>}
+            <button type="button" onClick={exitMoveMode}>
+              Done
+            </button>
+          </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)}>−</button>
-
-              <input
-                type="number"
-                min={0}
-                value={i.quantity ?? 0}
-                onChange={(e) =>
-                  setItems((prev) =>
-                    prev.map((it) =>
-                      it.id === i.id
-                        ? { ...it, quantity: Number(e.target.value) }
-                        : it
-                    )
-                  )
-                }
-                style={{ width: 90 }}
-              />
-
-              <button onClick={() => saveQuantity(i.id, (i.quantity ?? 0) + 1)}>+</button>
-
-              <button onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
-                Save
-              </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+            <button type="button" onClick={selectAll} disabled={items.length === 0}>
+              Select all
+            </button>
+            <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0}>
+              Clear
+            </button>
+            <div style={{ alignSelf: "center", opacity: 0.85 }}>
+              Selected: <strong>{selectedIds.size}</strong>
             </div>
           </div>
-        ))}
+
+          <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+            <select value={bulkDestBoxId} onChange={(e) => setBulkDestBoxId(e.target.value)}>
+              <option value="">Select destination box…</option>
+              {destinationBoxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.code}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={moveSelected}
+              disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
+              style={{ background: "#111", color: "#fff" }}
+            >
+              {busy ? "Moving..." : "Move selected"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Items */}
+      <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.map((i) => {
+          const hasPhoto = Boolean(i.photo_url);
+
+          return (
+            <div
+              key={i.id}
+              style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 18,
+                padding: 14,
+                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {/* Checkbox only visible in move mode */}
+                {moveMode && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(i.id)}
+                    onChange={() => toggleSelected(i.id)}
+                    style={{ transform: "scale(1.25)" }}
+                  />
+                )}
+
+                {/* Name tap opens photo (if exists). In move mode, name still works. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (hasPhoto) setViewItem(i);
+                  }}
+                  disabled={!hasPhoto}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    boxShadow: "none",
+                    textAlign: "left",
+                    fontWeight: 900,
+                    cursor: hasPhoto ? "pointer" : "default",
+                    opacity: hasPhoto ? 1 : 0.9,
+                  }}
+                  title={hasPhoto ? "Tap to view photo" : "No photo yet"}
+                >
+                  {i.name}
+                  {hasPhoto ? <span style={{ marginLeft: 8, opacity: 0.6 }}>📷</span> : null}
+                </button>
+              </div>
+
+              {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
+
+              {/* Quantity */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) - 1)}>
+                  −
+                </button>
+
+                <input
+                  type="number"
+                  min={0}
+                  value={i.quantity ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setItems((prev) => prev.map((it) => (it.id === i.id ? { ...it, quantity: n } : it)));
+                  }}
+                  style={{ width: 110 }}
+                />
+
+                <button type="button" onClick={() => saveQuantity(i.id, (i.quantity ?? 0) + 1)}>
+                  +
+                </button>
+
+                <button type="button" onClick={() => saveQuantity(i.id, i.quantity ?? 0)}>
+                  Save
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Floating Add Item FAB */}
@@ -377,6 +439,7 @@ export default function BoxPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          textDecoration: "none",
           boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
           zIndex: 2000,
         }}
@@ -396,7 +459,55 @@ export default function BoxPage() {
         </svg>
       </a>
 
-      {/* Fullscreen photo viewer */}
+      {/* Floating Move FAB (swap icon) */}
+      <button
+        type="button"
+        onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
+        aria-label="Move items"
+        style={{
+          position: "fixed",
+          right: 18,
+          bottom: 86, // sits above the + button
+          width: 58,
+          height: 58,
+          borderRadius: 999,
+          background: moveMode ? "#16a34a" : "#ffffff",
+          border: "1px solid #e5e7eb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
+          zIndex: 2000,
+          cursor: "pointer",
+        }}
+        title={moveMode ? "Exit move mode" : "Move items"}
+      >
+        {/* Two boxes with circular arrow */}
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={moveMode ? "white" : "#111"}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {/* boxes */}
+          <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
+          <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
+          {/* circular arrows */}
+          <path d="M7 5.5c2.5-2 6.5-2 9 0" />
+          <path d="M16 5.5h-3" />
+          <path d="M17 5.5v3" />
+
+          <path d="M17 18.5c-2.5 2-6.5 2-9 0" />
+          <path d="M7 18.5h3" />
+          <path d="M7 18.5v-3" />
+        </svg>
+      </button>
+
+      {/* Full screen photo viewer */}
       {viewItem && viewItem.photo_url && (
         <div
           onClick={() => setViewItem(null)}
@@ -408,12 +519,13 @@ export default function BoxPage() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 3000,
+            padding: 12,
           }}
         >
           <img
             src={viewItem.photo_url}
             alt={viewItem.name}
-            style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 16 }}
+            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }}
           />
         </div>
       )}
