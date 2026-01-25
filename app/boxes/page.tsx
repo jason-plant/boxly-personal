@@ -98,7 +98,11 @@ export default function BoxesPage() {
     }
 
     // Delete items
-    const delItemsRes = await supabase.from("items").delete().eq("box_id", boxToDelete.id);
+    const delItemsRes = await supabase
+      .from("items")
+      .delete()
+      .eq("box_id", boxToDelete.id);
+
     if (delItemsRes.error) {
       setError(delItemsRes.error.message);
       setBusy(false);
@@ -107,6 +111,7 @@ export default function BoxesPage() {
 
     // Delete box
     const delBoxRes = await supabase.from("boxes").delete().eq("id", boxToDelete.id);
+
     if (delBoxRes.error) {
       setError(delBoxRes.error.message);
       setBusy(false);
@@ -135,8 +140,9 @@ export default function BoxesPage() {
             b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
 
           return (
-            <div
+            <a
               key={b.id}
+              href={`/box/${encodeURIComponent(b.code)}`}
               style={{
                 background: "#fff",
                 border: "1px solid #e5e7eb",
@@ -148,20 +154,12 @@ export default function BoxesPage() {
                 justifyContent: "space-between",
                 gap: 12,
                 flexWrap: "wrap",
+                textDecoration: "none",
+                color: "#111",
               }}
             >
               <div>
-                <a
-                  href={`/box/${encodeURIComponent(b.code)}`}
-                  style={{
-                    textDecoration: "none",
-                    color: "#111",
-                    fontWeight: 900,
-                    fontSize: 16,
-                  }}
-                >
-                  {b.code}
-                </a>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
 
                 {b.name && <div style={{ marginTop: 4, fontWeight: 700 }}>{b.name}</div>}
                 {b.location && <div style={{ marginTop: 2, opacity: 0.8 }}>{b.location}</div>}
@@ -186,7 +184,11 @@ export default function BoxesPage() {
 
               <button
                 type="button"
-                onClick={() => requestDeleteBox(b)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  requestDeleteBox(b);
+                }}
                 disabled={busy}
                 style={{
                   border: "1px solid #ef4444",
@@ -197,7 +199,7 @@ export default function BoxesPage() {
               >
                 Delete
               </button>
-            </div>
+            </a>
           );
         })}
       </div>
