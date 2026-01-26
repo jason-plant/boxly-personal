@@ -137,7 +137,7 @@ export default function LocationsPage() {
               >
                 Delete
               </button>
-              <span style={{ opacity: 0.6 }}>Open →</span>
+              <span style={{ opacity: 0.6 }}></span>
             </div>
           </a>
         ))}
