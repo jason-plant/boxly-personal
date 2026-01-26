@@ -27,8 +27,22 @@ export default function NewItemPage() {
     setBusy(true);
     setError(null);
 
+    // ✅ Get logged-in user (needed for per-user photo folder)
+    const userRes = await supabase.auth.getUser();
+    const user = userRes.data.user;
+
+    if (!user) {
+      setError("You must be logged in to add items.");
+      setBusy(false);
+      return;
+    }
+
     // 1️⃣ Find box id
-    const boxRes = await supabase.from("boxes").select("id").eq("code", code).maybeSingle();
+    const boxRes = await supabase
+      .from("boxes")
+      .select("id")
+      .eq("code", code)
+      .maybeSingle();
 
     if (!boxRes.data || boxRes.error) {
       setError("Box not found.");
@@ -58,12 +72,15 @@ export default function NewItemPage() {
 
     // 3️⃣ Upload photo if provided
     if (photoFile) {
-      const ext = photoFile.name.split(".").pop() || "jpg";
-      const fileName = `${itemId}-${Date.now()}.${ext}`;
+      const ext = (photoFile.name.split(".").pop() || "jpg").toLowerCase();
 
-      const upload = await supabase.storage.from("item-photos").upload(fileName, photoFile, {
-        upsert: true,
-      });
+      // ✅ store inside a folder for THIS user
+      // example: 123e4567.../itemId-1700000000000.jpg
+      const fileName = `${user.id}/${itemId}-${Date.now()}.${ext}`;
+
+      const upload = await supabase.storage
+        .from("item-photos")
+        .upload(fileName, photoFile, { upsert: true });
 
       if (upload.error) {
         setError(upload.error.message);
@@ -71,7 +88,9 @@ export default function NewItemPage() {
         return;
       }
 
-      const publicUrl = supabase.storage.from("item-photos").getPublicUrl(fileName).data.publicUrl;
+      const publicUrl = supabase.storage
+        .from("item-photos")
+        .getPublicUrl(fileName).data.publicUrl;
 
       await supabase.from("items").update({ photo_url: publicUrl }).eq("id", itemId);
     }
@@ -82,7 +101,7 @@ export default function NewItemPage() {
 
   return (
     <RequireAuth>
-      <main style={{ paddingBottom: 90 }}>
+      <main>
         <div
           style={{
             background: "#fff",
@@ -100,7 +119,12 @@ export default function NewItemPage() {
           {error && <p style={{ color: "crimson" }}>{error}</p>}
 
           <div style={{ display: "grid", gap: 12 }}>
-            <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <input
+              placeholder="Item name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
 
             <input
               placeholder="Description (optional)"
@@ -108,7 +132,12 @@ export default function NewItemPage() {
               onChange={(e) => setDesc(e.target.value)}
             />
 
-            <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(Number(e.target.value))}
+            />
 
             {/* PHOTO PICKERS */}
             <div>
@@ -144,7 +173,6 @@ export default function NewItemPage() {
                 <button type="button" onClick={() => document.getElementById("file")?.click()}>
                   Choose file
                 </button>
-
                 {photoFile && (
                   <span style={{ alignSelf: "center", opacity: 0.7 }}>{photoFile.name}</span>
                 )}
@@ -152,16 +180,11 @@ export default function NewItemPage() {
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-              <button type="button" onClick={() => router.push(`/box/${encodeURIComponent(code)}`)}>
+              <button onClick={() => router.push(`/box/${encodeURIComponent(code)}`)}>
                 Cancel
               </button>
 
-              <button
-                type="button"
-                onClick={save}
-                disabled={busy}
-                style={{ background: "#111", color: "#fff" }}
-              >
+              <button onClick={save} disabled={busy} style={{ background: "#111", color: "#fff" }}>
                 {busy ? "Saving..." : "Save item"}
               </button>
             </div>
