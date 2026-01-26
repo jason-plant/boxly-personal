@@ -64,29 +64,9 @@ export default function LocationPage() {
     load();
   }, [locationId]);
 
-  if (loading) {
-    return (
-      <main style={{ padding: 16 }}>
-        <p>Loading…</p>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main style={{ padding: 16 }}>
-        <p style={{ color: "crimson" }}>{error}</p>
-      </main>
-    );
-  }
-
-  if (!location) {
-    return (
-      <main style={{ padding: 16 }}>
-        <p>Location not found.</p>
-      </main>
-    );
-  }
+  if (loading) return <main style={{ padding: 16 }}><p>Loading…</p></main>;
+  if (error) return <main style={{ padding: 16 }}><p style={{ color: "crimson" }}>{error}</p></main>;
+  if (!location) return <main style={{ padding: 16 }}><p>Location not found.</p></main>;
 
   return (
     <main style={{ paddingBottom: 90 }}>
@@ -103,19 +83,13 @@ export default function LocationPage() {
             className="card"
             style={{
               padding: 14,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
+              display: "block",
               color: "#111",
               textDecoration: "none",
             }}
           >
-            <div>
-              <div style={{ fontWeight: 900 }}>{b.code}</div>
-              {b.name && <div style={{ opacity: 0.85, marginTop: 4 }}>{b.name}</div>}
-            </div>
-            <span style={{ opacity: 0.6 }}>Open →</span>
+            <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
+            {b.name && <div style={{ marginTop: 6, opacity: 0.85 }}>{b.name}</div>}
           </a>
         ))}
       </div>

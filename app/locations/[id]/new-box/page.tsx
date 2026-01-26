@@ -82,6 +82,7 @@ export default function NewBoxInLocationPage() {
     setBusy(true);
     setErr(null);
 
+    // Insert box + return the code so we can open it
     const insertRes = await supabase
       .from("boxes")
       .insert({
@@ -89,16 +90,17 @@ export default function NewBoxInLocationPage() {
         name: trimmed,
         location_id: location.id,
       })
-      .select("id")
+      .select("code")
       .single();
 
-    if (insertRes.error) {
-      setErr(insertRes.error.message);
+    if (insertRes.error || !insertRes.data) {
+      setErr(insertRes.error?.message || "Failed to create box.");
       setBusy(false);
       return;
     }
 
-    router.push(`/locations/${encodeURIComponent(location.id)}`);
+    // ✅ Immediately open the new box
+    router.push(`/box/${encodeURIComponent(insertRes.data.code)}`);
     router.refresh();
   }
 
@@ -120,9 +122,12 @@ export default function NewBoxInLocationPage() {
       {err && <p style={{ color: "crimson" }}>Error: {err}</p>}
 
       <div
-        className="card"
         style={{
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 18,
           padding: 14,
+          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
           maxWidth: 520,
           display: "grid",
           gap: 10,
