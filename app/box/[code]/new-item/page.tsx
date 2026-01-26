@@ -2,7 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { supabase } from "../../../../lib/supabaseClient";
+import { supabase } from "../../../lib/supabaseClient";
+import RequireAuth from "../../../components/RequireAuth";
 
 export default function NewItemPage() {
   const params = useParams<{ code?: string }>();
@@ -27,11 +28,7 @@ export default function NewItemPage() {
     setError(null);
 
     // 1️⃣ Find box id
-    const boxRes = await supabase
-      .from("boxes")
-      .select("id")
-      .eq("code", code)
-      .maybeSingle();
+    const boxRes = await supabase.from("boxes").select("id").eq("code", code).maybeSingle();
 
     if (!boxRes.data || boxRes.error) {
       setError("Box not found.");
@@ -64,9 +61,9 @@ export default function NewItemPage() {
       const ext = photoFile.name.split(".").pop() || "jpg";
       const fileName = `${itemId}-${Date.now()}.${ext}`;
 
-      const upload = await supabase.storage
-        .from("item-photos")
-        .upload(fileName, photoFile, { upsert: true });
+      const upload = await supabase.storage.from("item-photos").upload(fileName, photoFile, {
+        upsert: true,
+      });
 
       if (upload.error) {
         setError(upload.error.message);
@@ -74,14 +71,9 @@ export default function NewItemPage() {
         return;
       }
 
-      const publicUrl = supabase.storage
-        .from("item-photos")
-        .getPublicUrl(fileName).data.publicUrl;
+      const publicUrl = supabase.storage.from("item-photos").getPublicUrl(fileName).data.publicUrl;
 
-      await supabase
-        .from("items")
-        .update({ photo_url: publicUrl })
-        .eq("id", itemId);
+      await supabase.from("items").update({ photo_url: publicUrl }).eq("id", itemId);
     }
 
     // 4️⃣ Done → back to box
@@ -89,103 +81,93 @@ export default function NewItemPage() {
   }
 
   return (
-    <main>
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 18,
-          padding: 14,
-          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-        }}
-      >
-        <h1 style={{ marginTop: 6 }}>Add Item</h1>
-        <p style={{ opacity: 0.85, marginTop: 0 }}>
-          Adding to <strong>{code}</strong>
-        </p>
+    <RequireAuth>
+      <main style={{ paddingBottom: 90 }}>
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 18,
+            padding: 14,
+            boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+          }}
+        >
+          <h1 style={{ marginTop: 6 }}>Add Item</h1>
+          <p style={{ opacity: 0.85, marginTop: 0 }}>
+            Adding to <strong>{code}</strong>
+          </p>
 
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
+          {error && <p style={{ color: "crimson" }}>{error}</p>}
 
-        <div style={{ display: "grid", gap: 12 }}>
-          <input
-            placeholder="Item name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-
-          <input
-            placeholder="Description (optional)"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-          />
-
-          <input
-            type="number"
-            min={1}
-            value={qty}
-            onChange={(e) => setQty(Number(e.target.value))}
-          />
-
-          {/* PHOTO PICKERS */}
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 700 }}>
-              Add photo (optional)
-            </div>
+          <div style={{ display: "grid", gap: 12 }}>
+            <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
 
             <input
-              id="cam"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                setPhotoFile(e.target.files?.[0] ?? null);
-                e.currentTarget.value = "";
-              }}
+              placeholder="Description (optional)"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
             />
 
-            <input
-              id="file"
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                setPhotoFile(e.target.files?.[0] ?? null);
-                e.currentTarget.value = "";
-              }}
-            />
+            <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" onClick={() => document.getElementById("cam")?.click()}>
-                Take photo
-              </button>
-              <button type="button" onClick={() => document.getElementById("file")?.click()}>
-                Choose file
-              </button>
-              {photoFile && (
-                <span style={{ alignSelf: "center", opacity: 0.7 }}>
-                  {photoFile.name}
-                </span>
-              )}
+            {/* PHOTO PICKERS */}
+            <div>
+              <div style={{ marginBottom: 8, fontWeight: 700 }}>Add photo (optional)</div>
+
+              <input
+                id="cam"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  setPhotoFile(e.target.files?.[0] ?? null);
+                  e.currentTarget.value = "";
+                }}
+              />
+
+              <input
+                id="file"
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  setPhotoFile(e.target.files?.[0] ?? null);
+                  e.currentTarget.value = "";
+                }}
+              />
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => document.getElementById("cam")?.click()}>
+                  Take photo
+                </button>
+                <button type="button" onClick={() => document.getElementById("file")?.click()}>
+                  Choose file
+                </button>
+
+                {photoFile && (
+                  <span style={{ alignSelf: "center", opacity: 0.7 }}>{photoFile.name}</span>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-            <button onClick={() => router.push(`/box/${encodeURIComponent(code)}`)}>
-              Cancel
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+              <button type="button" onClick={() => router.push(`/box/${encodeURIComponent(code)}`)}>
+                Cancel
+              </button>
 
-            <button
-              onClick={save}
-              disabled={busy}
-              style={{ background: "#111", color: "#fff" }}
-            >
-              {busy ? "Saving..." : "Save item"}
-            </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={busy}
+                style={{ background: "#111", color: "#fff" }}
+              >
+                {busy ? "Saving..." : "Save item"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </RequireAuth>
   );
 }
