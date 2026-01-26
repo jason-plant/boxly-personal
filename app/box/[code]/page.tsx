@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+
 import QRCode from "qrcode";
-import { supabase } from "../../../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient";
+import RequireAuth from "../../components/RequireAuth";
 
 type BoxRow = {
   id: string;
@@ -369,501 +371,467 @@ export default function BoxPage() {
 
   /* ============= Render ============= */
 
-  if (loading) return <p>Loading…</p>;
-  if (!box) return <p>Box not found.</p>;
-
-  const destinationBoxes = allBoxes.filter((b) => b.id !== box.id);
+  const destinationBoxes = box ? allBoxes.filter((b) => b.id !== box.id) : [];
 
   return (
-    <main style={{ paddingBottom: 180 }}>
-      {/* Header */}
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 18,
-          padding: 14,
-          boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
-            {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
-            {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
-          </div>
-
-          <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>Print QR</button>
-        </div>
-
-        {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
-      </div>
-
-      {/* Move Mode panel (kept because it’s handy for Select all / Clear) */}
-      {moveMode && (
-        <div
-          style={{
-            marginTop: 12,
-            background: "#fff",
-            border: "2px solid #111",
-            borderRadius: 18,
-            padding: 14,
-            boxShadow: "0 1px 10px rgba(0,0,0,0.10)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div>
-              <h2 style={{ margin: 0 }}>Move items</h2>
-              <div style={{ opacity: 0.85 }}>Tap item cards to select. Use the sticky bar to move.</div>
-            </div>
-
-            <button type="button" onClick={exitMoveMode} disabled={busy}>
-              Done
-            </button>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <button type="button" onClick={selectAll} disabled={items.length === 0 || busy}>
-              Select all
-            </button>
-            <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0 || busy}>
-              Clear
-            </button>
-            <div style={{ alignSelf: "center", opacity: 0.85 }}>
-              Selected: <strong>{selectedIds.size}</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Items */}
-      <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
-
-      <div style={{ display: "grid", gap: 10 }}>
-        {items.map((i) => {
-          const hasPhoto = Boolean(i.photo_url);
-          const isSelected = selectedIds.has(i.id);
-
-          return (
-            <div
-              key={i.id}
-              onClick={() => {
-                if (moveMode) toggleSelected(i.id);
-              }}
-              style={{
-                background: "#fff",
-                border: moveMode
-                  ? isSelected
-                    ? "2px solid #16a34a"
-                    : "2px solid #e5e7eb"
-                  : "1px solid #e5e7eb",
-                borderRadius: 18,
-                padding: 14,
-                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-                cursor: moveMode ? "pointer" : "default",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {moveMode && (
-                  <div
-                    aria-hidden
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 999,
-                      border: isSelected ? "2px solid #16a34a" : "2px solid #cbd5e1",
-                      background: isSelected ? "#16a34a" : "transparent",
-                      flex: "0 0 auto",
-                    }}
-                  />
-                )}
-
-                {/* Item name + photo indicator */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (moveMode) return;
-                    if (hasPhoto) setViewItem(i);
-                  }}
-                  disabled={moveMode || !hasPhoto}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    boxShadow: "none",
-                    textAlign: "left",
-                    fontWeight: 900,
-                    cursor: !moveMode && hasPhoto ? "pointer" : "default",
-                    opacity: 1,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                  title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
-                >
-                  {i.name}
-                  {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
-                </button>
-              </div>
-
-              {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
-
-              {/* Quantity controls - NO Save button */}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveQuantity(i.id, (i.quantity ?? 0) - 1);
-                  }}
-                  disabled={busy || moveMode}
-                >
-                  −
-                </button>
-
-                <input
-                  type="number"
-                  min={0}
-                  value={i.quantity ?? 0}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    setItems((prev) => prev.map((it) => (it.id === i.id ? { ...it, quantity: n } : it)));
-                  }}
-                  onBlur={(e) => {
-                    // Optional: if they manually type a number, we save it when they tap away
-                    if (moveMode) return;
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n)) saveQuantity(i.id, n);
-                  }}
-                  style={{ width: 110 }}
-                  disabled={busy || moveMode}
-                  onClick={(e) => e.stopPropagation()}
-                />
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveQuantity(i.id, (i.quantity ?? 0) + 1);
-                  }}
-                  disabled={busy || moveMode}
-                >
-                  +
-                </button>
-              </div>
-
-              {moveMode && (
-                <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
-                  Tap card to {isSelected ? "unselect" : "select"}.
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Floating Add Item FAB */}
-      <a
-        href={`/box/${encodeURIComponent(box.code)}/new-item`}
-        aria-label="Add item"
-        style={{
-          position: "fixed",
-          right: 18,
-          bottom: 18,
-          width: 58,
-          height: 58,
-          borderRadius: 999,
-          background: "#111",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textDecoration: "none",
-          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
-          zIndex: 2000,
-        }}
-      >
-        <svg
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </a>
-
-      {/* Floating Move FAB */}
-      <button
-        type="button"
-        onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
-        aria-label="Move items"
-        style={{
-          position: "fixed",
-          right: 18,
-          bottom: 86,
-          width: 58,
-          height: 58,
-          borderRadius: 999,
-          background: moveMode ? "#16a34a" : "#ffffff",
-          border: "1px solid #e5e7eb",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
-          zIndex: 2000,
-          cursor: "pointer",
-        }}
-        title={moveMode ? "Exit move mode" : "Move items"}
-        disabled={busy}
-      >
-        <svg
-          width="28"
-          height="28"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={moveMode ? "white" : "#111"}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
-          <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
-          <path d="M7 5.5c2.5-2 6.5-2 9 0" />
-          <path d="M16 5.5h-3" />
-          <path d="M17 5.5v3" />
-          <path d="M17 18.5c-2.5 2-6.5 2-9 0" />
-          <path d="M7 18.5h3" />
-          <path d="M7 18.5v-3" />
-        </svg>
-      </button>
-
-      {/* Sticky Move Action Bar */}
-      {moveMode && (
-        <div
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: "12px 14px calc(env(safe-area-inset-bottom) + 12px)",
-            background: "#ffffff",
-            borderTop: "1px solid #e5e7eb",
-            boxShadow: "0 -10px 30px rgba(0,0,0,0.15)",
-            zIndex: 3500,
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontWeight: 900 }}>Selected: {selectedIds.size}</div>
-
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <select
-              value={bulkDestBoxId}
-              onChange={(e) => onDestinationChange(e.target.value)}
-              disabled={busy}
-              style={{ width: "100%" }}
-            >
-              <option value="">Destination…</option>
-              <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
-              {destinationBoxes.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.code}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            type="button"
-            onClick={requestMoveSelected}
-            disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
+    <RequireAuth>
+      {loading ? (
+        <main style={{ padding: 16 }}>
+          <p>Loading…</p>
+        </main>
+      ) : !box ? (
+        <main style={{ padding: 16 }}>
+          <p>{error ?? "Box not found."}</p>
+        </main>
+      ) : (
+        <main style={{ paddingBottom: 180 }}>
+          {/* Header */}
+          <div
             style={{
-              background: "#111",
-              color: "#fff",
-              fontWeight: 900,
-              padding: "10px 16px",
-              borderRadius: 14,
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 18,
+              padding: 14,
+              boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
             }}
           >
-            {busy ? "Moving…" : "Move"}
-          </button>
-        </div>
-      )}
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
+                {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
+                {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
+              </div>
 
-      {/* Full screen photo viewer */}
-      {!moveMode && viewItem && viewItem.photo_url && (
-        <div
-          onClick={() => setViewItem(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.9)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 3000,
-            padding: 12,
-          }}
-        >
-          <img
-            src={viewItem.photo_url}
-            alt={viewItem.name}
-            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }}
-          />
-        </div>
-      )}
+              <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>Print QR</button>
+            </div>
 
-      {/* Create new box modal */}
-      <Modal
-        open={newBoxOpen}
-        title={`Create new box (${nextAutoCode})`}
-        onClose={() => {
-          if (busy) return;
-          setNewBoxOpen(false);
-          setNewBoxName("");
-        }}
-      >
-        <p style={{ marginTop: 0, opacity: 0.85 }}>Enter a name. Code is auto-assigned.</p>
+            {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
+          </div>
 
-        <input
-          placeholder="Box name"
-          value={newBoxName}
-          onChange={(e) => setNewBoxName(e.target.value)}
-          autoFocus
-        />
+          {/* Move Mode panel */}
+          {moveMode && (
+            <div
+              style={{
+                marginTop: 12,
+                background: "#fff",
+                border: "2px solid #111",
+                borderRadius: 18,
+                padding: 14,
+                boxShadow: "0 1px 10px rgba(0,0,0,0.10)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Move items</h2>
+                  <div style={{ opacity: 0.85 }}>Tap item cards to select. Use the sticky bar to move.</div>
+                </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <button type="button" onClick={exitMoveMode} disabled={busy}>
+                  Done
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <button type="button" onClick={selectAll} disabled={items.length === 0 || busy}>
+                  Select all
+                </button>
+                <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0 || busy}>
+                  Clear
+                </button>
+                <div style={{ alignSelf: "center", opacity: 0.85 }}>
+                  Selected: <strong>{selectedIds.size}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Items */}
+          <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {items.map((i) => {
+              const hasPhoto = Boolean(i.photo_url);
+              const isSelected = selectedIds.has(i.id);
+
+              return (
+                <div
+                  key={i.id}
+                  onClick={() => {
+                    if (moveMode) toggleSelected(i.id);
+                  }}
+                  style={{
+                    background: "#fff",
+                    border: moveMode ? (isSelected ? "2px solid #16a34a" : "2px solid #e5e7eb") : "1px solid #e5e7eb",
+                    borderRadius: 18,
+                    padding: 14,
+                    boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+                    cursor: moveMode ? "pointer" : "default",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    {moveMode && (
+                      <div
+                        aria-hidden
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 999,
+                          border: isSelected ? "2px solid #16a34a" : "2px solid #cbd5e1",
+                          background: isSelected ? "#16a34a" : "transparent",
+                          flex: "0 0 auto",
+                        }}
+                      />
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (moveMode) return;
+                        if (hasPhoto) setViewItem(i);
+                      }}
+                      disabled={moveMode || !hasPhoto}
+                      style={{
+                        padding: 0,
+                        border: "none",
+                        background: "transparent",
+                        boxShadow: "none",
+                        textAlign: "left",
+                        fontWeight: 900,
+                        cursor: !moveMode && hasPhoto ? "pointer" : "default",
+                        opacity: 1,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                      title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
+                    >
+                      {i.name}
+                      {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
+                    </button>
+                  </div>
+
+                  {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
+
+                  {/* Quantity controls */}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveQuantity(i.id, (i.quantity ?? 0) - 1);
+                      }}
+                      disabled={busy || moveMode}
+                    >
+                      −
+                    </button>
+
+                    <input
+                      type="number"
+                      min={0}
+                      value={i.quantity ?? 0}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setItems((prev) => prev.map((it) => (it.id === i.id ? { ...it, quantity: n } : it)));
+                      }}
+                      onBlur={(e) => {
+                        if (moveMode) return;
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n)) saveQuantity(i.id, n);
+                      }}
+                      style={{ width: 110 }}
+                      disabled={busy || moveMode}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveQuantity(i.id, (i.quantity ?? 0) + 1);
+                      }}
+                      disabled={busy || moveMode}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {moveMode && (
+                    <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
+                      Tap card to {isSelected ? "unselect" : "select"}.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Floating Add Item FAB */}
+          <a
+            href={`/box/${encodeURIComponent(box.code)}/new-item`}
+            aria-label="Add item"
+            style={{
+              position: "fixed",
+              right: 18,
+              bottom: 18,
+              width: 58,
+              height: 58,
+              borderRadius: 999,
+              background: "#111",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textDecoration: "none",
+              boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
+              zIndex: 2000,
+            }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </a>
+
+          {/* Floating Move FAB */}
           <button
             type="button"
-            onClick={() => {
+            onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
+            aria-label="Move items"
+            style={{
+              position: "fixed",
+              right: 18,
+              bottom: 86,
+              width: 58,
+              height: 58,
+              borderRadius: 999,
+              background: moveMode ? "#16a34a" : "#ffffff",
+              border: "1px solid #e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
+              zIndex: 2000,
+              cursor: "pointer",
+            }}
+            title={moveMode ? "Exit move mode" : "Move items"}
+            disabled={busy}
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={moveMode ? "white" : "#111"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
+              <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
+              <path d="M7 5.5c2.5-2 6.5-2 9 0" />
+              <path d="M16 5.5h-3" />
+              <path d="M17 5.5v3" />
+              <path d="M17 18.5c-2.5 2-6.5 2-9 0" />
+              <path d="M7 18.5h3" />
+              <path d="M7 18.5v-3" />
+            </svg>
+          </button>
+
+          {/* Sticky Move Action Bar */}
+          {moveMode && (
+            <div
+              style={{
+                position: "fixed",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: "12px 14px calc(env(safe-area-inset-bottom) + 12px)",
+                background: "#ffffff",
+                borderTop: "1px solid #e5e7eb",
+                boxShadow: "0 -10px 30px rgba(0,0,0,0.15)",
+                zIndex: 3500,
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ fontWeight: 900 }}>Selected: {selectedIds.size}</div>
+
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <select value={bulkDestBoxId} onChange={(e) => onDestinationChange(e.target.value)} disabled={busy} style={{ width: "100%" }}>
+                  <option value="">Destination…</option>
+                  <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
+                  {destinationBoxes.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={requestMoveSelected}
+                disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
+                style={{
+                  background: "#111",
+                  color: "#fff",
+                  fontWeight: 900,
+                  padding: "10px 16px",
+                  borderRadius: 14,
+                }}
+              >
+                {busy ? "Moving…" : "Move"}
+              </button>
+            </div>
+          )}
+
+          {/* Full screen photo viewer */}
+          {!moveMode && viewItem && viewItem.photo_url && (
+            <div
+              onClick={() => setViewItem(null)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 3000,
+                padding: 12,
+              }}
+            >
+              <img src={viewItem.photo_url} alt={viewItem.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }} />
+            </div>
+          )}
+
+          {/* Create new box modal */}
+          <Modal
+            open={newBoxOpen}
+            title={`Create new box (${nextAutoCode})`}
+            onClose={() => {
               if (busy) return;
               setNewBoxOpen(false);
               setNewBoxName("");
             }}
-            disabled={busy}
           >
-            Cancel
-          </button>
+            <p style={{ marginTop: 0, opacity: 0.85 }}>Enter a name. Code is auto-assigned.</p>
 
-          <button
-            type="button"
-            onClick={async () => {
-              const created = await createNewBoxFromMove(newBoxName);
-              if (created) {
-                setNewBoxOpen(false);
-                setNewBoxName("");
-              }
+            <input placeholder="Box name" value={newBoxName} onChange={(e) => setNewBoxName(e.target.value)} autoFocus />
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (busy) return;
+                  setNewBoxOpen(false);
+                  setNewBoxName("");
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const created = await createNewBoxFromMove(newBoxName);
+                  if (created) {
+                    setNewBoxOpen(false);
+                    setNewBoxName("");
+                  }
+                }}
+                disabled={busy || !newBoxName.trim()}
+                style={{ background: "#111", color: "#fff" }}
+              >
+                {busy ? "Creating..." : "Create box"}
+              </button>
+            </div>
+          </Modal>
+
+          {/* Confirm move modal */}
+          <Modal
+            open={confirmMoveOpen}
+            title="Confirm move"
+            onClose={() => {
+              if (busy) return;
+              setConfirmMoveOpen(false);
+              confirmMoveInfoRef.current = null;
             }}
-            disabled={busy || !newBoxName.trim()}
-            style={{ background: "#111", color: "#fff" }}
           >
-            {busy ? "Creating..." : "Create box"}
-          </button>
-        </div>
-      </Modal>
+            {(() => {
+              const info = confirmMoveInfoRef.current;
+              if (!info) return <p>Missing move info.</p>;
 
-      {/* Confirm move modal */}
-      <Modal
-        open={confirmMoveOpen}
-        title="Confirm move"
-        onClose={() => {
-          if (busy) return;
-          setConfirmMoveOpen(false);
-          confirmMoveInfoRef.current = null;
-        }}
-      >
-        {(() => {
-          const info = confirmMoveInfoRef.current;
-          if (!info) return <p>Missing move info.</p>;
+              return (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    Move <strong>{info.count}</strong> item(s) from <strong>{info.fromCode}</strong> to{" "}
+                    <strong>{info.toCode}</strong>?
+                  </p>
 
-          return (
-            <>
-              <p style={{ marginTop: 0 }}>
-                Move <strong>{info.count}</strong> item(s) from <strong>{info.fromCode}</strong> to{" "}
-                <strong>{info.toCode}</strong>?
-              </p>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (busy) return;
+                        setConfirmMoveOpen(false);
+                        confirmMoveInfoRef.current = null;
+                      }}
+                      disabled={busy}
+                    >
+                      Cancel
+                    </button>
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (busy) return;
-                    setConfirmMoveOpen(false);
-                    confirmMoveInfoRef.current = null;
-                  }}
-                  disabled={busy}
-                >
-                  Cancel
-                </button>
+                    <button type="button" onClick={confirmMoveSelected} disabled={busy} style={{ background: "#111", color: "#fff" }}>
+                      {busy ? "Moving..." : "Yes, move"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </Modal>
 
-                <button
-                  type="button"
-                  onClick={confirmMoveSelected}
-                  disabled={busy}
-                  style={{ background: "#111", color: "#fff" }}
-                >
-                  {busy ? "Moving..." : "Yes, move"}
-                </button>
-              </div>
-            </>
-          );
-        })()}
-      </Modal>
-
-      {/* Confirm delete modal */}
-      <Modal
-        open={confirmDeleteOpen}
-        title="Delete item?"
-        onClose={() => {
-          if (busy) return;
-          setConfirmDeleteOpen(false);
-          deleteItemRef.current = null;
-        }}
-      >
-        <p style={{ marginTop: 0 }}>
-          Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
-        </p>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
+          {/* Confirm delete modal */}
+          <Modal
+            open={confirmDeleteOpen}
+            title="Delete item?"
+            onClose={() => {
               if (busy) return;
               setConfirmDeleteOpen(false);
               deleteItemRef.current = null;
-              if (box) reloadItems(box.id);
             }}
-            disabled={busy}
           >
-            Cancel
-          </button>
+            <p style={{ marginTop: 0 }}>
+              Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+            </p>
 
-          <button
-            type="button"
-            onClick={async () => {
-              const item = deleteItemRef.current;
-              if (!item) return;
-              setConfirmDeleteOpen(false);
-              deleteItemRef.current = null;
-              await deleteItemAndPhoto(item);
-            }}
-            disabled={busy}
-            style={{ background: "#ef4444", color: "#fff" }}
-          >
-            {busy ? "Deleting..." : "Delete"}
-          </button>
-        </div>
-      </Modal>
-    </main>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (busy) return;
+                  setConfirmDeleteOpen(false);
+                  deleteItemRef.current = null;
+                  if (box) reloadItems(box.id);
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const item = deleteItemRef.current;
+                  if (!item) return;
+                  setConfirmDeleteOpen(false);
+                  deleteItemRef.current = null;
+                  await deleteItemAndPhoto(item);
+                }}
+                disabled={busy}
+                style={{ background: "#ef4444", color: "#fff" }}
+              >
+                {busy ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </Modal>
+        </main>
+      )}
+    </RequireAuth>
   );
 }
 
