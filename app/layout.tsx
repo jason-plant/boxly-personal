@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import React from "react";
+import NavLinks from "./NavLinks";
 
 export const metadata: Metadata = {
   title: "Storage Inventory",
@@ -9,20 +10,6 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-};
-
-const linkStyle: React.CSSProperties = {
-  textDecoration: "none",
-  color: "#111",
-  border: "1px solid #ddd",
-  padding: "10px 12px",
-  borderRadius: 14,
-  fontSize: 14,
-  fontWeight: 700,
-  background: "#fff",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -39,13 +26,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <style>{`
           :root{
+            --card:#ffffff;
             --border:#e5e7eb;
             --shadow: 0 1px 10px rgba(0,0,0,0.06);
             --shadow-press: 0 1px 6px rgba(0,0,0,0.10);
+            --radius: 16px;
           }
 
+          /* Make form controls feel "app-like" */
           input, select, button, textarea {
-            font-size: 16px;
+            font-size: 16px; /* prevents iOS zoom on focus */
             border-radius: 14px;
             border: 1px solid var(--border);
             padding: 12px 12px;
@@ -66,16 +56,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             box-shadow: none;
           }
 
+          /* Tap targets */
           a, button, input, select {
             -webkit-tap-highlight-color: transparent;
           }
 
-          /* Press / tap animation */
+          /* ✅ Press / Tap animation (applies everywhere) */
           button:active {
             transform: scale(0.98);
             box-shadow: var(--shadow-press);
           }
 
+          /* Any link we want to behave like a button */
           .tap-btn {
             box-shadow: var(--shadow);
             transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
@@ -85,11 +77,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             box-shadow: var(--shadow-press);
           }
 
-          /* Mobile layout for navbar */
+          /* Mobile: make buttons full width where it makes sense */
           @media (max-width: 600px) {
             .nav-wrap { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; }
             .nav-links a { flex: 1; text-align: center; }
+
+            .full-width-mobile { width: 100% !important; }
           }
         `}</style>
 
@@ -128,28 +122,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Storage Inventory
             </a>
 
-            <div className="nav-links" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href="/locations" className="tap-btn" style={linkStyle}>
-                Locations
-              </a>
-              <a href="/boxes" className="tap-btn" style={linkStyle}>
-                Boxes
-              </a>
-              <a href="/search" className="tap-btn" style={linkStyle}>
-                Search
-              </a>
-              <a href="/labels" className="tap-btn" style={linkStyle}>
-                Labels
-              </a>
-              <a href="/scan" className="tap-btn" style={linkStyle}>
-                Scan QR
-              </a>
-            </div>
+            {/* ✅ Active-highlighted nav buttons */}
+            <NavLinks />
           </div>
         </nav>
 
         {/* CONTENT */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 14px 28px" }}>{children}</div>
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            padding: "14px 14px 28px",
+          }}
+        >
+          {children}
+        </div>
       </body>
     </html>
   );
