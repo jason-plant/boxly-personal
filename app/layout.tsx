@@ -42,9 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             --radius: 16px;
           }
 
-          /* Make form controls feel "app-like" */
           input, select, button, textarea {
-            font-size: 16px; /* prevents iOS zoom on focus */
+            font-size: 16px;
             border-radius: 14px;
             border: 1px solid var(--border);
             padding: 12px 12px;
@@ -64,17 +63,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             box-shadow: none;
           }
 
-          /* Tap targets */
           a, button, input, select {
             -webkit-tap-highlight-color: transparent;
           }
 
-          /* Mobile: make buttons full width where it makes sense */
           @media (max-width: 600px) {
             .nav-wrap { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; }
             .nav-links a { flex: 1; text-align: center; }
-
             .full-width-mobile { width: 100% !important; }
           }
         `}</style>
@@ -102,8 +98,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               gap: 12,
             }}
           >
+            {/* Title now goes to Locations */}
             <a
-              href="/boxes"
+              href="/locations"
               style={{
                 fontWeight: 900,
                 textDecoration: "none",
@@ -114,39 +111,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Storage Inventory
             </a>
 
-            <div
-              className="nav-links"
-              style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
-            >
-              {/* NEW: Locations */}
-              <a href="/locations" style={linkStyle}>
-                Locations
-              </a>
-
-              <a href="/boxes" style={linkStyle}>
-                Boxes
-              </a>
-              <a href="/search" style={linkStyle}>
-                Search
-              </a>
-              <a href="/labels" style={linkStyle}>
-                Labels
-              </a>
-              <a href="/scan" style={linkStyle}>
-                Scan QR
-              </a>
+            <div className="nav-links" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a href="/locations" style={linkStyle}>Locations</a>
+              <a href="/boxes" style={linkStyle}>Boxes</a>
+              <a href="/search" style={linkStyle}>Search</a>
+              <a href="/labels" style={linkStyle}>Labels</a>
+              <a href="/scan" style={linkStyle}>Scan QR</a>
             </div>
           </div>
         </nav>
 
         {/* CONTENT */}
-        <div
-          style={{
-            maxWidth: 1100,
-            margin: "0 auto",
-            padding: "14px 14px 28px",
-          }}
-        >
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 14px 28px" }}>
           {children}
         </div>
       </body>
