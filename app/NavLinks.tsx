@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const itemBase: React.CSSProperties = {
@@ -34,6 +34,7 @@ function isActive(pathname: string, href: string) {
 export default function NavLinks() {
   const pathname = usePathname() || "/";
   const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const links = useMemo(
     () => [
@@ -46,10 +47,12 @@ export default function NavLinks() {
     []
   );
 
+  // Close on route change
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
+  // Escape closes
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -58,9 +61,17 @@ export default function NavLinks() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  // ✅ KEY FIX: when opening, force scroll to TOP
+  useEffect(() => {
+    if (!open) return;
+    // wait a tick for DOM to render
+    requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = 0;
+    });
+  }, [open]);
+
   return (
     <>
-      {/* Menu button */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -78,7 +89,6 @@ export default function NavLinks() {
         <span aria-hidden>☰</span> Menu
       </button>
 
-      {/* Overlay */}
       {open && (
         <div
           role="dialog"
@@ -97,7 +107,6 @@ export default function NavLinks() {
             padding: 12,
           }}
         >
-          {/* Bottom sheet */}
           <div
             style={{
               width: "100%",
@@ -107,17 +116,12 @@ export default function NavLinks() {
               border: "1px solid #e5e7eb",
               boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
               padding: 14,
-
-              // fixed-ish height, but NOT huge
               height: "min(340px, 65vh)",
-
-              // IMPORTANT: this makes the sheet layout behave
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
             }}
           >
-            {/* Header */}
             <div
               style={{
                 display: "flex",
@@ -145,9 +149,8 @@ export default function NavLinks() {
               </button>
             </div>
 
-            {/* ✅ THIS is the real fix:
-                flex:1 + minHeight:0 so the list scrolls instead of pushing/clipping */}
             <div
+              ref={listRef}
               style={{
                 marginTop: 12,
                 display: "grid",
@@ -166,10 +169,7 @@ export default function NavLinks() {
                     key={l.href}
                     href={l.href}
                     className="tap-btn"
-                    style={{
-                      ...itemBase,
-                      ...(active ? itemActive : null),
-                    }}
+                    style={{ ...itemBase, ...(active ? itemActive : null) }}
                     aria-current={active ? "page" : undefined}
                     onClick={() => setOpen(false)}
                   >
