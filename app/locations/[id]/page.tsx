@@ -15,6 +15,14 @@ type BoxRow = {
   name: string | null;
 };
 
+const cardStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 18,
+  padding: 14,
+  boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+};
+
 export default function LocationPage() {
   const params = useParams<{ id?: string }>();
   const locationId = params?.id ? decodeURIComponent(String(params.id)) : "";
@@ -80,12 +88,11 @@ export default function LocationPage() {
           <a
             key={b.id}
             href={`/box/${encodeURIComponent(b.code)}`}
-            className="card"
             style={{
-              padding: 14,
+              ...cardStyle,
               display: "block",
-              color: "#111",
               textDecoration: "none",
+              color: "#111",
             }}
           >
             <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
