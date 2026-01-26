@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import React from "react";
-import NavBarLinks from "./NavBarLinks";
+import { AuthProvider } from "./lib/auth";
+import NavBarLinks from "./NavBarLinks"; // keep if you already have it
 
 export const metadata: Metadata = {
   title: "Storage Inventory",
@@ -32,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
 
           input, select, button, textarea {
-            font-size: 16px; /* stops iOS zoom */
+            font-size: 16px;
             border-radius: 14px;
             border: 1px solid var(--border);
             padding: 12px 12px;
@@ -57,13 +58,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             -webkit-tap-highlight-color: transparent;
           }
 
-          /* ✅ Press animation for ALL buttons */
           button:active {
             transform: scale(0.98);
             box-shadow: var(--shadow-press);
           }
 
-          /* ✅ Press animation for links that act like buttons */
           .tap-btn {
             box-shadow: var(--shadow);
             transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
@@ -73,7 +72,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             box-shadow: var(--shadow-press);
           }
 
-          /* Mobile: stack the nav nicely */
           @media (max-width: 600px) {
             .nav-wrap { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; }
@@ -81,48 +79,51 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}</style>
 
-        {/* NAV BAR */}
-        <nav
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 100,
-            background: "rgba(246,246,247,0.9)",
-            backdropFilter: "blur(10px)",
-            borderBottom: "1px solid #eaeaea",
-          }}
-        >
-          <div
-            className="nav-wrap"
+        <AuthProvider>
+          {/* NAV BAR */}
+          <nav
             style={{
-              maxWidth: 1100,
-              margin: "0 auto",
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
+              position: "sticky",
+              top: 0,
+              zIndex: 100,
+              background: "rgba(246,246,247,0.9)",
+              backdropFilter: "blur(10px)",
+              borderBottom: "1px solid #eaeaea",
             }}
           >
-            <a
-              href="/locations"
+            <div
+              className="nav-wrap"
               style={{
-                fontWeight: 900,
-                textDecoration: "none",
-                color: "#111",
-                fontSize: 18,
+                maxWidth: 1100,
+                margin: "0 auto",
+                padding: "12px 16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
               }}
             >
-              Storage Inventory
-            </a>
+              <a
+                href="/locations"
+                style={{
+                  fontWeight: 900,
+                  textDecoration: "none",
+                  color: "#111",
+                  fontSize: 18,
+                }}
+              >
+                Storage Inventory
+              </a>
 
-            {/* ✅ Active highlight links */}
-            <NavBarLinks />
+              <NavBarLinks />
+            </div>
+          </nav>
+
+          {/* CONTENT */}
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 14px 28px" }}>
+            {children}
           </div>
-        </nav>
-
-        {/* CONTENT */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 14px 28px" }}>{children}</div>
+        </AuthProvider>
       </body>
     </html>
   );

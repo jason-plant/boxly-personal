@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+import RequireAuth from "../components/RequireAuth";
 
 type BoxRow = {
   id: string;
@@ -98,10 +99,7 @@ export default function BoxesPage() {
     }
 
     // Delete items
-    const delItemsRes = await supabase
-      .from("items")
-      .delete()
-      .eq("box_id", boxToDelete.id);
+    const delItemsRes = await supabase.from("items").delete().eq("box_id", boxToDelete.id);
 
     if (delItemsRes.error) {
       setError(delItemsRes.error.message);
@@ -127,159 +125,160 @@ export default function BoxesPage() {
   }
 
   return (
-    <main style={{ paddingBottom: 90 }}>
-      <h1 style={{ marginTop: 6 }}>Boxes</h1>
+    <RequireAuth>
+      <main style={{ paddingBottom: 90 }}>
+        <h1 style={{ marginTop: 6 }}>Boxes</h1>
 
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
-      {loading && <p>Loading boxes…</p>}
-      {!loading && boxes.length === 0 && <p>No boxes yet.</p>}
+        {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+        {loading && <p>Loading boxes…</p>}
+        {!loading && boxes.length === 0 && <p>No boxes yet.</p>}
 
-      <div style={{ display: "grid", gap: 10 }}>
-        {boxes.map((b) => {
-          const totalQty =
-            b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
+        <div style={{ display: "grid", gap: 10 }}>
+          {boxes.map((b) => {
+            const totalQty = b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
 
-          return (
-            <a
-              key={b.id}
-              href={`/box/${encodeURIComponent(b.code)}`}
-              style={{
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 18,
-                padding: 14,
-                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                textDecoration: "none",
-                color: "#111",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
-
-                {b.name && <div style={{ marginTop: 4, fontWeight: 700 }}>{b.name}</div>}
-                {b.location && <div style={{ marginTop: 2, opacity: 0.8 }}>{b.location}</div>}
-
-                {/* Item count badge */}
-                <div
-                  style={{
-                    marginTop: 8,
-                    display: "inline-block",
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    fontWeight: 900,
-                    fontSize: 13,
-                    background: "#ecfdf5",
-                    border: "1px solid #bbf7d0",
-                    color: "#166534",
-                  }}
-                >
-                  {totalQty} item{totalQty === 1 ? "" : "s"}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  requestDeleteBox(b);
-                }}
-                disabled={busy}
+            return (
+              <a
+                key={b.id}
+                href={`/box/${encodeURIComponent(b.code)}`}
                 style={{
-                  border: "1px solid #ef4444",
-                  color: "#ef4444",
                   background: "#fff",
-                  fontWeight: 900,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 18,
+                  padding: 14,
+                  boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  textDecoration: "none",
+                  color: "#111",
                 }}
               >
-                Delete
-              </button>
-            </a>
-          );
-        })}
-      </div>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
 
-      {/* Floating + bubble */}
-      <a
-        href="/boxes/new"
-        aria-label="Create new box"
-        style={{
-          position: "fixed",
-          right: 18,
-          bottom: 18,
-          width: 58,
-          height: 58,
-          borderRadius: 999,
-          background: "#111",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textDecoration: "none",
-          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
-          zIndex: 2000,
-        }}
-      >
-        <svg
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </a>
+                  {b.name && <div style={{ marginTop: 4, fontWeight: 700 }}>{b.name}</div>}
+                  {b.location && <div style={{ marginTop: 2, opacity: 0.8 }}>{b.location}</div>}
 
-      {/* Delete box modal */}
-      <Modal
-        open={confirmDeleteOpen}
-        title="Delete box?"
-        onClose={() => {
-          if (busy) return;
-          setConfirmDeleteOpen(false);
-          boxToDeleteRef.current = null;
-        }}
-      >
-        <p style={{ marginTop: 0 }}>
-          Delete <strong>{boxToDeleteRef.current?.code ?? "this box"}</strong>?
-        </p>
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          This will delete all items inside it and remove linked photos.
-        </p>
+                  {/* Item count badge */}
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "inline-block",
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      fontWeight: 900,
+                      fontSize: 13,
+                      background: "#ecfdf5",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                    }}
+                  >
+                    {totalQty} item{totalQty === 1 ? "" : "s"}
+                  </div>
+                </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (busy) return;
-              setConfirmDeleteOpen(false);
-              boxToDeleteRef.current = null;
-            }}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={confirmDeleteBox}
-            disabled={busy}
-            style={{ background: "#ef4444", color: "#fff" }}
-          >
-            {busy ? "Deleting..." : "Delete"}
-          </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    requestDeleteBox(b);
+                  }}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #ef4444",
+                    color: "#ef4444",
+                    background: "#fff",
+                    fontWeight: 900,
+                  }}
+                >
+                  Delete
+                </button>
+              </a>
+            );
+          })}
         </div>
-      </Modal>
-    </main>
+
+        {/* Floating + bubble */}
+        <a
+          href="/boxes/new"
+          aria-label="Create new box"
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: 18,
+            width: 58,
+            height: 58,
+            borderRadius: 999,
+            background: "#111",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textDecoration: "none",
+            boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
+            zIndex: 2000,
+          }}
+        >
+          <svg
+            width="26"
+            height="26"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </a>
+
+        {/* Delete box modal */}
+        <Modal
+          open={confirmDeleteOpen}
+          title="Delete box?"
+          onClose={() => {
+            if (busy) return;
+            setConfirmDeleteOpen(false);
+            boxToDeleteRef.current = null;
+          }}
+        >
+          <p style={{ marginTop: 0 }}>
+            Delete <strong>{boxToDeleteRef.current?.code ?? "this box"}</strong>?
+          </p>
+          <p style={{ marginTop: 0, opacity: 0.85 }}>
+            This will delete all items inside it and remove linked photos.
+          </p>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (busy) return;
+                setConfirmDeleteOpen(false);
+                boxToDeleteRef.current = null;
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={confirmDeleteBox}
+              disabled={busy}
+              style={{ background: "#ef4444", color: "#fff" }}
+            >
+              {busy ? "Deleting..." : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      </main>
+    </RequireAuth>
   );
 }
 

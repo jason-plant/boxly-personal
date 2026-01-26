@@ -46,12 +46,11 @@ function LocationsInner() {
   }, []);
 
   return (
-    <main>
-      <h1 style={{ marginTop: 0 }}>Locations</h1>
+    <main style={{ paddingBottom: 90 }}>
+      <h1 style={{ marginTop: 6 }}>Locations</h1>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {loading && <p>Loading…</p>}
-
       {!loading && locations.length === 0 && <p>No locations yet.</p>}
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -69,9 +68,12 @@ function LocationsInner() {
               color: "#111",
               boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
               fontWeight: 900,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
-            {l.name}
+            <span>{l.name}</span>
           </a>
         ))}
       </div>

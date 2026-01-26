@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+import RequireAuth from "../components/RequireAuth";
 
 type BoxRow = {
   id: string;
@@ -18,7 +19,6 @@ export default function LabelsPage() {
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
 
   const origin = useMemo(() => {
-    // On Vercel this becomes https://your-app.vercel.app
     return typeof window !== "undefined" ? window.location.origin : "";
   }, []);
 
@@ -36,7 +36,7 @@ export default function LabelsPage() {
         setError(error.message);
         setBoxes([]);
       } else {
-        setBoxes(data ?? []);
+        setBoxes((data ?? []) as BoxRow[]);
       }
 
       setLoading(false);
@@ -54,7 +54,6 @@ export default function LabelsPage() {
 
       for (const b of boxes) {
         const url = `${origin}/box/${encodeURIComponent(b.code)}`;
-        // Smaller size prints better on label sheets
         const dataUrl = await QRCode.toDataURL(url, { margin: 1, width: 320 });
         next[b.code] = dataUrl;
       }
@@ -66,83 +65,101 @@ export default function LabelsPage() {
   }, [boxes, origin]);
 
   return (
-    <main style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-      <div className="no-print" style={{ marginBottom: 16 }}>
-        <h1>QR Labels</h1>
-        <p>
-          Print this page (Ctrl+P). Each label opens the box page when scanned.
-        </p>
-        <p style={{ opacity: 0.8 }}>
-          Tip: In print settings, turn on “Background graphics” for cleaner QR
-          edges (optional).
-        </p>
-        <button
-          type="button"
-          onClick={() => window.print()}
+    <RequireAuth>
+      <main style={{ paddingBottom: 90 }}>
+        <div
+          className="no-print"
           style={{
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #444",
-            cursor: "pointer",
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 18,
+            padding: 14,
+            boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+            marginTop: 6,
+            marginBottom: 14,
           }}
         >
-          Print
-        </button>
-        <hr style={{ marginTop: 16 }} />
-      </div>
+          <h1 style={{ margin: 0 }}>QR Labels</h1>
 
-      {loading && <p>Loading boxes…</p>}
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+          <p style={{ marginTop: 8, marginBottom: 6, opacity: 0.9 }}>
+            Print this page. Each label opens the box page when scanned.
+          </p>
 
-      {!loading && !error && boxes.length === 0 && (
-        <p>No boxes found.</p>
-      )}
+          <p style={{ marginTop: 0, opacity: 0.75 }}>
+            Tip: In print settings, enable “Background graphics” for cleaner QR edges (optional).
+          </p>
 
-      {/* Print-friendly grid */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white; }
-        }
-      `}</style>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 18,
-        }}
-      >
-        {boxes.map((b) => (
-          <div
-            key={b.id}
+          <button
+            type="button"
+            onClick={() => window.print()}
             style={{
-              border: "1px solid #000",
-              padding: 14,
-              borderRadius: 8,
-              breakInside: "avoid",
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
+              padding: "10px 14px",
+              borderRadius: 14,
+              border: "1px solid #111",
+              cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 16, fontWeight: 800 }}>{b.code}</div>
-            {b.name && <div style={{ fontSize: 12 }}>{b.name}</div>}
-            {b.location && (
-              <div style={{ fontSize: 11, opacity: 0.8 }}>{b.location}</div>
-            )}
+            Print
+          </button>
+        </div>
 
-            <div style={{ marginTop: 8 }}>
-              {qrMap[b.code] ? (
-                <img
-                  src={qrMap[b.code]}
-                  alt={`QR for ${b.code}`}
-                  style={{ width: "100%", maxWidth: 240 }}
-                />
-              ) : (
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Generating QR…</div>
+        {loading && <p>Loading boxes…</p>}
+        {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+
+        {!loading && !error && boxes.length === 0 && <p>No boxes found.</p>}
+
+        {/* Print-friendly rules */}
+        <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            a { text-decoration: none !important; color: #000 !important; }
+          }
+        `}</style>
+
+        {/* Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 18,
+          }}
+        >
+          {boxes.map((b) => (
+            <div
+              key={b.id}
+              style={{
+                background: "#fff",
+                border: "1px solid #000", // keep bold for printing
+                padding: 14,
+                borderRadius: 12,
+                breakInside: "avoid",
+              }}
+            >
+              <div style={{ fontSize: 16, fontWeight: 900 }}>{b.code}</div>
+              {b.name && <div style={{ fontSize: 12, marginTop: 4 }}>{b.name}</div>}
+              {b.location && (
+                <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>{b.location}</div>
               )}
+
+              <div style={{ marginTop: 10 }}>
+                {qrMap[b.code] ? (
+                  <img
+                    src={qrMap[b.code]}
+                    alt={`QR for ${b.code}`}
+                    style={{ width: "100%", maxWidth: 240, display: "block" }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>Generating QR…</div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-    </main>
+          ))}
+        </div>
+      </main>
+    </RequireAuth>
   );
 }

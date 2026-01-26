@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+import RequireAuth from "../components/RequireAuth";
 
 type SearchItem = {
   id: string;
@@ -9,7 +10,6 @@ type SearchItem = {
   description: string | null;
   photo_url: string | null;
   quantity: number | null;
-  // this field name depends on your select alias
   box: {
     code: string;
     location: string | null;
@@ -59,10 +59,9 @@ export default function SearchPage() {
         setError(res.error.message);
         setItems([]);
       } else {
-  const safeData: SearchItem[] = (res.data ?? []) as unknown as SearchItem[];
-  setItems(safeData);
-}
-
+        const safeData: SearchItem[] = (res.data ?? []) as unknown as SearchItem[];
+        setItems(safeData);
+      }
 
       setLoading(false);
     }, 300);
@@ -71,75 +70,93 @@ export default function SearchPage() {
   }, [query]);
 
   return (
-    <main style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-      <h1>Search Items</h1>
+    <RequireAuth>
+      <main style={{ paddingBottom: 90 }}>
+        <h1 style={{ marginTop: 6 }}>Search</h1>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search item name..."
-        style={{
-          width: "100%",
-          padding: 12,
-          fontSize: 16,
-          borderRadius: 8,
-          border: "1px solid #444",
-          marginBottom: 16,
-        }}
-      />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search item name..."
+          style={{
+            width: "100%",
+            marginTop: 10,
+          }}
+        />
 
-      {loading && <p>Searching…</p>}
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+        {loading && <p>Searching…</p>}
+        {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
 
-      {!loading && query && items.length === 0 && !error && <p>No items found.</p>}
+        {!loading && query && items.length === 0 && !error && <p>No items found.</p>}
 
-      <ul style={{ paddingLeft: 0, listStyle: "none" }}>
-        {items.map((i) => (
-          <li
-            key={i.id}
-            style={{
-              border: "1px solid #333",
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 12,
-              display: "flex",
-              gap: 12,
-            }}
-          >
-            {i.photo_url && (
-              <img
-                src={i.photo_url}
-                alt={i.name}
-                style={{
-                  width: 80,
-                  height: 80,
-                  objectFit: "cover",
-                  borderRadius: 6,
-                }}
-              />
-            )}
-
-            <div>
-              <strong>{i.name}</strong>
-              {i.quantity ? ` (x${i.quantity})` : ""}
-              {i.description && <div>{i.description}</div>}
-
-              {i.box && (
-                <div style={{ marginTop: 6 }}>
-                  Box:{" "}
-                  <a
-                    href={`/box/${encodeURIComponent(i.box.code)}`}
-                    style={{ fontWeight: 600 }}
-                  >
-                    {i.box.code}
-                  </a>
-                  {i.box.location ? ` — ${i.box.location}` : ""}
-                </div>
+        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+          {items.map((i) => (
+            <div
+              key={i.id}
+              style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 18,
+                padding: 14,
+                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
+            >
+              {i.photo_url && (
+                <img
+                  src={i.photo_url}
+                  alt={i.name}
+                  style={{
+                    width: 84,
+                    height: 84,
+                    objectFit: "cover",
+                    borderRadius: 14,
+                    border: "1px solid #e5e7eb",
+                    flex: "0 0 auto",
+                  }}
+                />
               )}
+
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>
+                  {i.name}
+                  {i.quantity ? ` (x${i.quantity})` : ""}
+                </div>
+
+                {i.description && <div style={{ marginTop: 6, opacity: 0.9 }}>{i.description}</div>}
+
+                {i.box && (
+                  <div style={{ marginTop: 10, opacity: 0.9 }}>
+                    Box:{" "}
+                    <a
+                      href={`/box/${encodeURIComponent(i.box.code)}`}
+                      className="tap-btn"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "8px 10px",
+                        borderRadius: 14,
+                        border: "1px solid #ddd",
+                        background: "#fff",
+                        fontWeight: 900,
+                        textDecoration: "none",
+                        color: "#111",
+                        marginLeft: 6,
+                      }}
+                    >
+                      {i.box.code}
+                    </a>
+                    {i.box.location ? <span style={{ marginLeft: 8 }}>— {i.box.location}</span> : null}
+                  </div>
+                )}
+              </div>
             </div>
-          </li>
-        ))}
-      </ul>
-    </main>
+          ))}
+        </div>
+      </main>
+    </RequireAuth>
   );
 }
