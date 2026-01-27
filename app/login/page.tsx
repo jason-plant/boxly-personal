@@ -1,86 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/auth";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const { user, loading } = useAuth();
 
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    setBusy(true);
-    setErr(null);
-    setMsg(null);
-
-    try {
-      if (!email.trim() || !password) {
-        setErr("Email and password are required.");
-        setBusy(false);
-        return;
-      }
-
-      if (mode === "signin") {
-        const res = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (res.error) throw res.error;
-
-        router.push("/boxes");
-        return;
-      }
-
-      // signup
-      const res = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
-      if (res.error) throw res.error;
-
-      // If email confirmations are ON, user must confirm first
-      setMsg(
-        "Account created. If email confirmation is enabled, check your inbox then come back and sign in."
-      );
-    } catch (e: any) {
-      setErr(e?.message || "Login failed.");
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    if (!loading && user) {
+      window.location.href = "/locations";
     }
+  }, [loading, user]);
+
+  async function onLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    const res = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (res.error) {
+      setError(res.error.message);
+      setBusy(false);
+      return;
+    }
+
+    window.location.href = "/locations";
   }
 
   return (
-    <main style={{ paddingBottom: 90 }}>
+    <main style={{ maxWidth: 420, margin: "40px auto" }}>
       <div
         style={{
           background: "#fff",
           border: "1px solid #e5e7eb",
           borderRadius: 18,
-          padding: 14,
+          padding: 18,
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-          marginTop: 6,
         }}
       >
-        <h1 style={{ margin: 0 }}>{mode === "signin" ? "Sign in" : "Create account"}</h1>
-        <p style={{ marginTop: 8, opacity: 0.85 }}>
-          {mode === "signin"
-            ? "Sign in to access your inventory."
-            : "Create an account to start your own private inventory."}
+        <h1 style={{ marginTop: 0 }}>Log in</h1>
+        <p style={{ opacity: 0.75, marginTop: 0 }}>
+          Sign in to your inventory
         </p>
 
-        {err && <p style={{ color: "crimson" }}>Error: {err}</p>}
-        {msg && <p style={{ color: "#166534" }}>{msg}</p>}
-
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+        <form onSubmit={onLogin} style={{ display: "grid", gap: 12 }}>
           <input
-            type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -88,33 +62,48 @@ export default function LoginPage() {
           />
 
           <input
-            type="password"
             placeholder="Password"
+            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            autoComplete="current-password"
           />
 
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy}
-            style={{ background: "#111", color: "#fff" }}
-          >
-            {busy ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
-          </button>
+          {error && (
+            <div style={{ color: "crimson", fontWeight: 700 }}>
+              {error}
+            </div>
+          )}
 
           <button
-            type="button"
-            onClick={() => {
-              setErr(null);
-              setMsg(null);
-              setMode((m) => (m === "signin" ? "signup" : "signin"));
+            type="submit"
+            disabled={busy || !email || password.length < 6}
+            style={{
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
             }}
           >
-            {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+            {busy ? "Signing in…" : "Log in"}
           </button>
-        </div>
+
+          <a
+            href="/signup"
+            className="tap-btn"
+            style={{
+              textAlign: "center",
+              padding: 12,
+              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              textDecoration: "none",
+              fontWeight: 800,
+              color: "#111",
+            }}
+          >
+            Create an account
+          </a>
+        </form>
       </div>
     </main>
   );
