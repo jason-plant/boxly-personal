@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import React from "react";
+import { AuthProvider } from "./lib/auth";
 import NavBarLinks from "./NavBarLinks";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Storage Inventory",
@@ -24,102 +26,100 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           color: "#111",
         }}
       >
-        {/* GLOBAL “APP” FEEL */}
-        <style>{`
-          :root{
-            --card:#ffffff;
-            --border:#e5e7eb;
-            --shadow: 0 1px 10px rgba(0,0,0,0.06);
-            --radius: 18px;
-          }
+        <AuthProvider>
+          <style>{`
+            :root{
+              --card:#ffffff;
+              --border:#e5e7eb;
+              --shadow: 0 1px 10px rgba(0,0,0,0.06);
+              --radius: 16px;
+            }
 
-          html, body { margin: 0; padding: 0; background: #f6f7fb; color:#111; }
+            /* Form controls feel "app-like" */
+            input, select, button, textarea {
+              font-size: 16px; /* prevents iOS zoom on focus */
+              border-radius: 14px;
+              border: 1px solid var(--border);
+              padding: 12px 12px;
+              box-sizing: border-box;
+            }
 
-          input, select, button, textarea {
-            font-size: 16px; /* stops iOS zoom */
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            padding: 12px 12px;
-            box-sizing: border-box;
-            background: #fff;
-            color: #111;
-          }
+            button {
+              background: #fff;
+              font-weight: 800;
+              cursor: pointer;
+              box-shadow: var(--shadow);
+            }
 
-          button {
-            font-weight: 900;
-            cursor: pointer;
-          }
+            button:disabled {
+              opacity: 0.55;
+              cursor: not-allowed;
+              box-shadow: none;
+            }
 
-          button:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-          }
+            /* Tap targets */
+            a, button, input, select {
+              -webkit-tap-highlight-color: transparent;
+            }
 
-          /* Simple “tap” animation */
-          .tap-btn:active {
-            transform: scale(0.98);
-          }
+            @media (max-width: 600px) {
+              .nav-wrap { flex-direction: column; align-items: flex-start; }
+              .nav-links { width: 100%; justify-content: flex-start; }
+            }
+          `}</style>
 
-          a { -webkit-tap-highlight-color: transparent; }
+          {/* NAV BAR */}
+          <nav
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 100,
+              background: "rgba(246,247,251,0.92)",
+              backdropFilter: "blur(10px)",
+              borderBottom: "1px solid #eaeaea",
+            }}
+          >
+            <div
+              className="nav-wrap"
+              style={{
+                maxWidth: 1100,
+                margin: "0 auto",
+                padding: "12px 16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <a
+                href="/locations"
+                style={{
+                  fontWeight: 900,
+                  textDecoration: "none",
+                  color: "#111",
+                  fontSize: 18,
+                }}
+              >
+                Storage Inventory
+              </a>
 
-          @media (max-width: 600px) {
-            .nav-wrap { flex-direction: column; align-items: flex-start; }
-            .nav-links { width: 100%; }
-          }
-        `}</style>
+              <div className="nav-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <NavBarLinks />
+              </div>
+            </div>
+          </nav>
 
-        {/* NAV BAR */}
-        <nav
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 100,
-            background: "rgba(246,247,251,0.92)",
-            backdropFilter: "blur(10px)",
-            borderBottom: "1px solid #eaeaea",
-          }}
-        >
+          {/* CONTENT */}
           <div
-            className="nav-wrap"
             style={{
               maxWidth: 1100,
               margin: "0 auto",
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
+              padding: "14px 14px 28px",
             }}
           >
-            <a
-              href="/boxes"
-              className="tap-btn"
-              style={{
-                fontWeight: 900,
-                textDecoration: "none",
-                color: "#111",
-                fontSize: 18,
-              }}
-            >
-              Storage Inventory
-            </a>
-
-            <div className="nav-links" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <NavBarLinks />
-            </div>
+            {children}
           </div>
-        </nav>
-
-        {/* CONTENT */}
-        <div
-          style={{
-            maxWidth: 1100,
-            margin: "0 auto",
-            padding: "14px 14px 28px",
-          }}
-        >
-          {children}
-        </div>
+        </AuthProvider>
       </body>
     </html>
   );
