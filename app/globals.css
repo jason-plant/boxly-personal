@@ -24,3 +24,47 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* ===== App-style buttons & links ===== */
+
+.tap-btn,
+.nav-btn {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #111;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 1px 10px rgba(0,0,0,0.06);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tap-btn:active,
+.nav-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 rgba(0,0,0,0.1);
+}
+
+.tap-btn.primary,
+.nav-btn.primary {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.tap-btn.danger {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fff;
+}
+
+.tap-btn.full {
+  width: 100%;
+}
