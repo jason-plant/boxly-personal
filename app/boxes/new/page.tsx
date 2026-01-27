@@ -40,8 +40,24 @@ export default function NewBoxPage() {
       setLoading(true);
       setError(null);
 
-      // Load existing box codes (for auto numbering)
-      const codesRes = await supabase.from("boxes").select("code").order("code");
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      if (authErr || !userId) {
+        setError(authErr?.message || "Not logged in.");
+        setExistingCodes([]);
+        setLocations([]);
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Load existing box codes FOR THIS USER (for auto numbering)
+      const codesRes = await supabase
+        .from("boxes")
+        .select("code")
+        .eq("owner_id", userId)
+        .order("code");
+
       if (codesRes.error) {
         setError(codesRes.error.message);
         setExistingCodes([]);
@@ -49,8 +65,13 @@ export default function NewBoxPage() {
         setExistingCodes((codesRes.data ?? []).map((b: BoxMini) => b.code));
       }
 
-      // Load locations for dropdown
-      const locRes = await supabase.from("locations").select("id, name").order("name");
+      // ✅ Load locations FOR THIS USER
+      const locRes = await supabase
+        .from("locations")
+        .select("id, name")
+        .eq("owner_id", userId)
+        .order("name");
+
       if (locRes.error) {
         setError((prev) => prev ?? locRes.error.message);
         setLocations([]);
@@ -88,8 +109,18 @@ export default function NewBoxPage() {
     setBusy(true);
     setError(null);
 
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+
+    if (authErr || !userId) {
+      setError(authErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
+    }
+
     const insertRes = await supabase.from("boxes").insert([
       {
+        owner_id: userId, // ✅ per-user isolation
         code: trimmed.toUpperCase(),
         name: name.trim() || null,
         location_id: locationId || null,
@@ -163,14 +194,18 @@ export default function NewBoxPage() {
           </select>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => router.push("/boxes")} disabled={busy}>
+            <button
+              type="button"
+              onClick={() => router.push("/boxes")}
+              disabled={busy}
+            >
               Cancel
             </button>
 
             <button
               type="button"
               onClick={save}
-              disabled={busy}
+              disabled={busy || loading}
               style={{ background: "#111", color: "#fff" }}
             >
               {busy ? "Saving..." : "Save box"}

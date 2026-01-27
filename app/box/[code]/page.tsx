@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-
 import QRCode from "qrcode";
 import { supabase } from "../../lib/supabaseClient";
 import RequireAuth from "../../components/RequireAuth";
@@ -87,29 +86,49 @@ export default function BoxPage() {
       setLoading(true);
       setError(null);
 
-      const boxRes = await supabase
-        .from("boxes")
-        .select("id, code, name, location")
-        .eq("code", code)
-        .maybeSingle();
+      // ✅ current user
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
 
-      if (!boxRes.data || boxRes.error) {
-        setError("Box not found");
+      if (authErr || !userId) {
+        setError(authErr?.message || "Not logged in.");
         setLoading(false);
         return;
       }
 
-      setBox(boxRes.data);
+      // ✅ box must belong to this user (code + owner_id)
+      const boxRes = await supabase
+        .from("boxes")
+        .select("id, code, name, location")
+        .eq("code", code)
+        .eq("owner_id", userId)
+        .maybeSingle();
 
+      if (!boxRes.data || boxRes.error) {
+        setError("Box not found");
+        setBox(null);
+        setLoading(false);
+        return;
+      }
+
+      setBox(boxRes.data as BoxRow);
+
+      // items for this box id
       const itemsRes = await supabase
         .from("items")
         .select("id, name, description, photo_url, quantity")
         .eq("box_id", boxRes.data.id)
         .order("name");
 
-      setItems(itemsRes.data ?? []);
+      setItems((itemsRes.data ?? []) as ItemRow[]);
 
-      const boxesRes = await supabase.from("boxes").select("id, code").order("code");
+      // ✅ only this user's boxes for move dropdown + auto code
+      const boxesRes = await supabase
+        .from("boxes")
+        .select("id, code")
+        .eq("owner_id", userId)
+        .order("code");
+
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
 
       // reset move state
@@ -140,7 +159,7 @@ export default function BoxPage() {
       .eq("box_id", boxId)
       .order("name");
 
-    setItems(data ?? []);
+    setItems((data ?? []) as ItemRow[]);
   }
 
   /* ============= Quantity & Delete ============= */
@@ -187,7 +206,11 @@ export default function BoxPage() {
       return;
     }
 
-    const res = await supabase.from("items").update({ quantity: safeQty }).eq("id", itemId);
+    const res = await supabase
+      .from("items")
+      .update({ quantity: safeQty })
+      .eq("id", itemId);
+
     if (res.error) {
       setError(res.error.message);
       return;
@@ -245,8 +268,18 @@ export default function BoxPage() {
   }
 
   async function createNewBoxFromMove(name: string) {
-    if (!name.trim()) {
+    const trimmed = name.trim();
+    if (!trimmed) {
       setError("Box name is required.");
+      return null;
+    }
+
+    // ✅ current user
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+
+    if (authErr || !userId) {
+      setError(authErr?.message || "Not logged in.");
       return null;
     }
 
@@ -256,8 +289,9 @@ export default function BoxPage() {
     const insertRes = await supabase
       .from("boxes")
       .insert({
+        owner_id: userId, // ✅ per-user
         code: nextAutoCode,
-        name: name.trim(),
+        name: trimmed,
         location: null,
       })
       .select("id, code")
@@ -327,7 +361,10 @@ export default function BoxPage() {
     setBusy(true);
     setError(null);
 
-    const res = await supabase.from("items").update({ box_id: info.toId }).in("id", info.itemIds);
+    const res = await supabase
+      .from("items")
+      .update({ box_id: info.toId })
+      .in("id", info.itemIds);
 
     if (res.error) {
       setError(res.error.message);

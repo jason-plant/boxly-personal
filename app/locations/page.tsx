@@ -31,9 +31,22 @@ function LocationsInner() {
     setLoading(true);
     setError(null);
 
+    // ✅ get current user
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+
+    if (authErr || !userId) {
+      setError(authErr?.message || "Not logged in.");
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
+
+    // ✅ only load THIS user's locations
     const { data, error } = await supabase
       .from("locations")
       .select("id,name")
+      .eq("owner_id", userId)
       .order("name");
 
     if (error) {
@@ -62,8 +75,23 @@ function LocationsInner() {
     setBusy(true);
     setError(null);
 
-    // delete location (assumes your DB allows it; if boxes reference it, you may need cascade or block)
-    const res = await supabase.from("locations").delete().eq("id", l.id);
+    // ✅ get current user
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+
+    if (authErr || !userId) {
+      setError(authErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    // ✅ only delete if it belongs to THIS user (extra safety)
+    const res = await supabase
+      .from("locations")
+      .delete()
+      .eq("id", l.id)
+      .eq("owner_id", userId);
+
     if (res.error) {
       setError(res.error.message);
       setBusy(false);
@@ -251,7 +279,14 @@ function Modal({
           padding: 14,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
           <h3 style={{ margin: 0 }}>{title}</h3>
 
           <button

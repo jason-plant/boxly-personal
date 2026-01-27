@@ -41,10 +41,21 @@ export default function NewBoxInLocationPage() {
     async function load() {
       setErr(null);
 
+      // ✅ current user
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      if (authErr || !userId) {
+        setErr(authErr?.message || "Not logged in.");
+        return;
+      }
+
+      // ✅ location must belong to this user
       const locRes = await supabase
         .from("locations")
         .select("id, name")
         .eq("id", locationId)
+        .eq("owner_id", userId)
         .maybeSingle();
 
       if (!locRes.data || locRes.error) {
@@ -54,7 +65,13 @@ export default function NewBoxInLocationPage() {
 
       setLocation(locRes.data as LocationRow);
 
-      const boxesRes = await supabase.from("boxes").select("id, code").order("code");
+      // ✅ only THIS user's boxes used for auto code
+      const boxesRes = await supabase
+        .from("boxes")
+        .select("id, code")
+        .eq("owner_id", userId)
+        .order("code");
+
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
     }
 
@@ -82,10 +99,21 @@ export default function NewBoxInLocationPage() {
     setBusy(true);
     setErr(null);
 
+    // ✅ current user
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+
+    if (authErr || !userId) {
+      setErr(authErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
+    }
+
     // Insert box + return the code so we can open it
     const insertRes = await supabase
       .from("boxes")
       .insert({
+        owner_id: userId, // ✅ per-user isolation
         code: nextAutoCode,
         name: trimmed,
         location_id: location.id,
@@ -134,7 +162,8 @@ export default function NewBoxInLocationPage() {
         }}
       >
         <div style={{ fontWeight: 900 }}>
-          Box Code (auto): <span style={{ opacity: 0.85 }}>{nextAutoCode}</span>
+          Box Code (auto):{" "}
+          <span style={{ opacity: 0.85 }}>{nextAutoCode}</span>
         </div>
 
         <input
