@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
+import RequireAuth from "../../components/RequireAuth";
 
 type BoxMini = { code: string };
 
@@ -22,6 +23,14 @@ function parseBoxNumber(code: string): number | null {
 }
 
 export default function NewBoxPage() {
+  return (
+    <RequireAuth>
+      <NewBoxInner />
+    </RequireAuth>
+  );
+}
+
+function NewBoxInner() {
   const router = useRouter();
 
   const [existingCodes, setExistingCodes] = useState<string[]>([]);
@@ -35,23 +44,30 @@ export default function NewBoxPage() {
   const [name, setName] = useState("");
   const [locationId, setLocationId] = useState<string>("");
 
+  // Inline "create location" modal
+  const [newLocOpen, setNewLocOpen] = useState(false);
+  const [newLocName, setNewLocName] = useState("");
+  const [newLocBusy, setNewLocBusy] = useState(false);
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
 
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      const userId = authData.user?.id;
+      // Current user (for owner_id)
+      const { data: sessionData, error: sessionErr } =
+        await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
 
-      if (authErr || !userId) {
-        setError(authErr?.message || "Not logged in.");
+      if (sessionErr || !userId) {
+        setError(sessionErr?.message || "Not logged in.");
         setExistingCodes([]);
         setLocations([]);
         setLoading(false);
         return;
       }
 
-      // ✅ Load existing box codes FOR THIS USER (for auto numbering)
+      // Load existing box codes (for auto numbering) - per user
       const codesRes = await supabase
         .from("boxes")
         .select("code")
@@ -65,7 +81,7 @@ export default function NewBoxPage() {
         setExistingCodes((codesRes.data ?? []).map((b: BoxMini) => b.code));
       }
 
-      // ✅ Load locations FOR THIS USER
+      // Load locations for dropdown - per user
       const locRes = await supabase
         .from("locations")
         .select("id, name")
@@ -94,6 +110,62 @@ export default function NewBoxPage() {
     return `BOX-${pad3(max + 1)}`;
   }, [existingCodes]);
 
+  async function handleLocationChange(value: string) {
+    if (value === "__new__") {
+      // reset and open modal
+      setNewLocName("");
+      setNewLocOpen(true);
+      return;
+    }
+    setLocationId(value);
+  }
+
+  async function createLocationInline() {
+    const trimmed = newLocName.trim();
+    if (!trimmed) return;
+
+    setNewLocBusy(true);
+    setError(null);
+
+    const { data: sessionData, error: sessionErr } =
+      await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sessionErr || !userId) {
+      setError(sessionErr?.message || "Not logged in.");
+      setNewLocBusy(false);
+      return;
+    }
+
+    // Create location (per user)
+    const res = await supabase
+      .from("locations")
+      .insert({
+        owner_id: userId,
+        name: trimmed,
+      })
+      .select("id, name")
+      .single();
+
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to create location.");
+      setNewLocBusy(false);
+      return;
+    }
+
+    // Add into list + select it
+    setLocations((prev) => {
+      const next = [...prev, res.data as LocationRow];
+      next.sort((a, b) => a.name.localeCompare(b.name));
+      return next;
+    });
+    setLocationId(res.data.id);
+
+    setNewLocOpen(false);
+    setNewLocName("");
+    setNewLocBusy(false);
+  }
+
   async function save() {
     const trimmed = code.trim();
 
@@ -109,18 +181,19 @@ export default function NewBoxPage() {
     setBusy(true);
     setError(null);
 
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
+    const { data: sessionData, error: sessionErr } =
+      await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
 
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
+    if (sessionErr || !userId) {
+      setError(sessionErr?.message || "Not logged in.");
       setBusy(false);
       return;
     }
 
     const insertRes = await supabase.from("boxes").insert([
       {
-        owner_id: userId, // ✅ per-user isolation
+        owner_id: userId,
         code: trimmed.toUpperCase(),
         name: name.trim() || null,
         location_id: locationId || null,
@@ -134,10 +207,11 @@ export default function NewBoxPage() {
     }
 
     router.push("/boxes");
+    router.refresh();
   }
 
   return (
-    <main>
+    <main style={{ paddingBottom: 90 }}>
       <div
         style={{
           background: "#fff",
@@ -145,6 +219,7 @@ export default function NewBoxPage() {
           borderRadius: 18,
           padding: 14,
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+          maxWidth: 560,
         }}
       >
         <h1 style={{ marginTop: 6 }}>Create Box</h1>
@@ -182,10 +257,11 @@ export default function NewBoxPage() {
 
           <select
             value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
+            onChange={(e) => handleLocationChange(e.target.value)}
             disabled={busy || loading}
           >
             <option value="">Select location (optional)</option>
+            <option value="__new__">➕ Create new location…</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -205,7 +281,7 @@ export default function NewBoxPage() {
             <button
               type="button"
               onClick={save}
-              disabled={busy || loading}
+              disabled={busy}
               style={{ background: "#111", color: "#fff" }}
             >
               {busy ? "Saving..." : "Save box"}
@@ -217,6 +293,132 @@ export default function NewBoxPage() {
           </p>
         </div>
       </div>
+
+      {/* Inline "Create location" modal */}
+      <Modal
+        open={newLocOpen}
+        title="Create new location"
+        onClose={() => {
+          if (newLocBusy) return;
+          setNewLocOpen(false);
+          setNewLocName("");
+        }}
+      >
+        <p style={{ marginTop: 0, opacity: 0.85 }}>
+          Add a new location without leaving this page.
+        </p>
+
+        <input
+          placeholder="Location name (e.g. Shed, Loft)"
+          value={newLocName}
+          onChange={(e) => setNewLocName(e.target.value)}
+          autoFocus
+          disabled={newLocBusy}
+        />
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (newLocBusy) return;
+              setNewLocOpen(false);
+              setNewLocName("");
+            }}
+            disabled={newLocBusy}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={createLocationInline}
+            disabled={newLocBusy || !newLocName.trim()}
+            style={{ background: "#111", color: "#fff" }}
+          >
+            {newLocBusy ? "Creating..." : "Create location"}
+          </button>
+        </div>
+      </Modal>
     </main>
+  );
+}
+
+/* ================= MODAL COMPONENT ================= */
+
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 4000,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        padding: 12,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          background: "#fff",
+          borderRadius: 18,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+          padding: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <h3 style={{ margin: 0 }}>{title}</h3>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              borderRadius: 999,
+              width: 40,
+              height: 40,
+              padding: 0,
+              lineHeight: "40px",
+              textAlign: "center",
+              fontWeight: 900,
+            }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
