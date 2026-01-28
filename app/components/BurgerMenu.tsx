@@ -32,7 +32,7 @@ function MenuRow({
         width: "100%",
         display: "flex",
         alignItems: "center",
-        gap: 5,
+        gap: 14,
         padding: "14px 16px",
         borderRadius: 16,
         border: "1px solid #e5e7eb",
@@ -55,29 +55,47 @@ export default function BurgerMenu() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
+  // open = target state
   const [open, setOpen] = useState(false);
+
+  // mounted = keep DOM around to play close animation
+  const [mounted, setMounted] = useState(false);
+
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Only lock scroll. Do NOT blur body.
+  // When open becomes true, mount immediately.
+  // When open becomes false, wait for animation to finish then unmount.
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    if (!mounted) return;
 
+    const t = setTimeout(() => setMounted(false), 220); // match CSS duration
+    return () => clearTimeout(t);
+  }, [open, mounted]);
+
+  // Lock scroll only while mounted (overlay exists)
+  useEffect(() => {
+    if (!mounted) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       document.body.style.overflow = prevOverflow;
     };
-  }, [open]);
+  }, [mounted]);
 
+  // Escape key
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    if (open) document.addEventListener("keydown", onKeyDown);
+    if (mounted) document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [mounted]);
 
+  // focus drawer on open
   useEffect(() => {
     if (!open) return;
     setTimeout(() => panelRef.current?.focus(), 10);
@@ -97,7 +115,10 @@ export default function BurgerMenu() {
 
   function go(href: string) {
     setOpen(false);
-    router.push(href);
+    // Wait for close animation then navigate (feels smoother)
+    setTimeout(() => {
+      router.push(href);
+    }, 200);
   }
 
   return (
@@ -134,8 +155,8 @@ export default function BurgerMenu() {
         </svg>
       </button>
 
-      {/* Overlay + Drawer */}
-      {open && (
+      {/* Overlay + Drawer (mounted for open/close animation) */}
+      {mounted && (
         <div
           role="dialog"
           aria-modal="true"
@@ -148,22 +169,23 @@ export default function BurgerMenu() {
             zIndex: 9999,
           }}
         >
-          {/* ✅ Backdrop (dims + optionally blurs ONLY what’s behind it) */}
+          {/* Backdrop */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: "rgba(0,0,0,0.82)",
-              // this blur affects the BACKDROP layer, not the drawer
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
+              background: open ? "rgba(0,0,0,0.82)" : "rgba(0,0,0,0)",
+              backdropFilter: open ? "blur(6px)" : "blur(0px)",
+              WebkitBackdropFilter: open ? "blur(6px)" : "blur(0px)",
+              transition: "background 220ms ease, backdrop-filter 220ms ease",
             }}
           />
 
-          {/* Drawer (crisp) */}
+          {/* Drawer */}
           <div
             ref={panelRef}
             tabIndex={-1}
+            onMouseDown={(e) => e.stopPropagation()}
             style={{
               position: "absolute",
               top: 0,
@@ -178,8 +200,12 @@ export default function BurgerMenu() {
               flexDirection: "column",
               gap: 14,
               zIndex: 1,
+
+              // ✅ animation
+              transform: open ? "translateX(0)" : "translateX(16px)",
+              opacity: open ? 1 : 0,
+              transition: "transform 220ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease",
             }}
-            onMouseDown={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -219,8 +245,10 @@ export default function BurgerMenu() {
                   label="Log out"
                   onClick={async () => {
                     setOpen(false);
-                    await signOut();
-                    router.push("/login");
+                    setTimeout(async () => {
+                      await signOut();
+                      router.push("/login");
+                    }, 200);
                   }}
                 />
               )}
