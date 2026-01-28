@@ -10,9 +10,11 @@ type SearchItem = {
   description: string | null;
   photo_url: string | null;
   quantity: number | null;
+
   box: {
     code: string;
-    location: string | null;
+    name: string | null;
+    location: { name: string } | null; // joined from locations table
   } | null;
 };
 
@@ -20,8 +22,6 @@ export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // IMPORTANT: state is typed
   const [items, setItems] = useState<SearchItem[]>([]);
 
   useEffect(() => {
@@ -37,6 +37,17 @@ export default function SearchPage() {
       setLoading(true);
       setError(null);
 
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      if (authErr || !userId) {
+        setError(authErr?.message || "Not logged in.");
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Pull location via boxes.location_id -> locations.name
       const res = await supabase
         .from("items")
         .select(
@@ -48,10 +59,12 @@ export default function SearchPage() {
           quantity,
           box:boxes (
             code,
-            location
+            name,
+            location:locations ( name )
           )
         `
         )
+        .eq("owner_id", userId)
         .ilike("name", `%${q}%`)
         .limit(50);
 
@@ -59,8 +72,7 @@ export default function SearchPage() {
         setError(res.error.message);
         setItems([]);
       } else {
-        const safeData: SearchItem[] = (res.data ?? []) as unknown as SearchItem[];
-        setItems(safeData);
+        setItems((res.data ?? []) as unknown as SearchItem[]);
       }
 
       setLoading(false);
@@ -78,10 +90,7 @@ export default function SearchPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search item name..."
-          style={{
-            width: "100%",
-            marginTop: 10,
-          }}
+          style={{ width: "100%", marginTop: 10 }}
         />
 
         {loading && <p>Searching…</p>}
@@ -90,71 +99,93 @@ export default function SearchPage() {
         {!loading && query && items.length === 0 && !error && <p>No items found.</p>}
 
         <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-          {items.map((i) => (
-            <div
-              key={i.id}
-              style={{
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 18,
-                padding: 14,
-                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-start",
-              }}
-            >
-              {i.photo_url && (
-                <img
-                  src={i.photo_url}
-                  alt={i.name}
-                  style={{
-                    width: 84,
-                    height: 84,
-                    objectFit: "cover",
-                    borderRadius: 14,
-                    border: "1px solid #e5e7eb",
-                    flex: "0 0 auto",
-                  }}
-                />
-              )}
+          {items.map((i) => {
+            const boxCode = i.box?.code ?? "";
+            const boxName = i.box?.name ?? null;
+            const locationName = i.box?.location?.name ?? null;
 
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>
-                  {i.name}
-                  {i.quantity ? ` (x${i.quantity})` : ""}
-                </div>
-
-                {i.description && <div style={{ marginTop: 6, opacity: 0.9 }}>{i.description}</div>}
-
-                {i.box && (
-                  <div style={{ marginTop: 10, opacity: 0.9 }}>
-                    Box:{" "}
-                    <a
-                      href={`/box/${encodeURIComponent(i.box.code)}`}
-                      className="tap-btn"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "8px 10px",
-                        borderRadius: 14,
-                        border: "1px solid #ddd",
-                        background: "#fff",
-                        fontWeight: 900,
-                        textDecoration: "none",
-                        color: "#111",
-                        marginLeft: 6,
-                      }}
-                    >
-                      {i.box.code}
-                    </a>
-                    {i.box.location ? <span style={{ marginLeft: 8 }}>— {i.box.location}</span> : null}
-                  </div>
+            return (
+              <div
+                key={i.id}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 18,
+                  padding: 14,
+                  boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "flex-start",
+                }}
+              >
+                {i.photo_url && (
+                  <img
+                    src={i.photo_url}
+                    alt={i.name}
+                    style={{
+                      width: 84,
+                      height: 84,
+                      objectFit: "cover",
+                      borderRadius: 14,
+                      border: "1px solid #e5e7eb",
+                      flex: "0 0 auto",
+                    }}
+                  />
                 )}
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 900, fontSize: 16 }}>
+                    {i.name}
+                    {typeof i.quantity === "number" ? ` (x${i.quantity})` : ""}
+                  </div>
+
+                  {i.description && <div style={{ marginTop: 6, opacity: 0.9 }}>{i.description}</div>}
+
+                  {(boxCode || boxName || locationName) && (
+                    <div style={{ marginTop: 10, opacity: 0.9 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontWeight: 800 }}>Box:</span>
+
+                        {boxCode ? (
+                          <a
+                            href={`/box/${encodeURIComponent(boxCode)}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "8px 10px",
+                              borderRadius: 14,
+                              border: "1px solid #ddd",
+                              background: "#fff",
+                              fontWeight: 900,
+                              textDecoration: "none",
+                              color: "#111",
+                            }}
+                          >
+                            {boxCode}
+                          </a>
+                        ) : (
+                          <span style={{ opacity: 0.7 }}>Unknown</span>
+                        )}
+
+                        {boxName ? (
+                          <span style={{ opacity: 0.95 }}>
+                            — <strong>{boxName}</strong>
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {locationName ? (
+                        <div style={{ marginTop: 6, opacity: 0.85 }}>
+                          Location: <strong>{locationName}</strong>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </RequireAuth>
