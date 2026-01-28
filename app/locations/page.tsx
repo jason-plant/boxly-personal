@@ -7,7 +7,6 @@ import { supabase } from "../lib/supabaseClient";
 type LocationRow = {
   id: string;
   name: string;
-  // comes from: .select("id,name, boxes(count)")
   boxes?: { count: number }[];
 };
 
@@ -25,11 +24,9 @@ function LocationsInner() {
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<LocationRow[]>([]);
 
-  // delete modal
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const locToDeleteRef = useRef<LocationRow | null>(null);
 
-  // ✅ blocked modal
   const [blockedOpen, setBlockedOpen] = useState(false);
   const blockedInfoRef = useRef<{ name: string; boxCount: number } | null>(null);
 
@@ -37,18 +34,16 @@ function LocationsInner() {
     setLoading(true);
     setError(null);
 
-    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const { data: sessionData } = await supabase.auth.getSession();
     const userId = sessionData.session?.user?.id;
 
-    if (sErr || !userId) {
-      setError(sErr?.message || "Not logged in.");
+    if (!userId) {
+      setError("Not logged in.");
       setLocations([]);
       setLoading(false);
       return;
     }
 
-    // ✅ Fetch locations AND the count of related boxes in one go
-    // This requires a FK relationship: boxes.location_id -> locations.id
     const { data, error } = await supabase
       .from("locations")
       .select("id,name, boxes(count)")
@@ -72,25 +67,15 @@ function LocationsInner() {
   async function requestDelete(l: LocationRow) {
     setError(null);
 
-    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const { data: sessionData } = await supabase.auth.getSession();
     const userId = sessionData.session?.user?.id;
+    if (!userId) return;
 
-    if (sErr || !userId) {
-      setError(sErr?.message || "Not logged in.");
-      return;
-    }
-
-    // ✅ check if location has boxes
     const boxesRes = await supabase
       .from("boxes")
       .select("id", { count: "exact", head: true })
       .eq("owner_id", userId)
       .eq("location_id", l.id);
-
-    if (boxesRes.error) {
-      setError(boxesRes.error.message);
-      return;
-    }
 
     const count = boxesRes.count ?? 0;
     if (count > 0) {
@@ -99,7 +84,6 @@ function LocationsInner() {
       return;
     }
 
-    // ok to delete
     locToDeleteRef.current = l;
     setConfirmDeleteOpen(true);
   }
@@ -127,62 +111,80 @@ function LocationsInner() {
   return (
     <main style={{ paddingBottom: 90 }}>
       <h1 style={{ marginTop: 6 }}>Locations</h1>
-      <p style={{ marginTop: 0, opacity: 0.75 }}>Choose a location to view its boxes.</p>
+      <p style={{ marginTop: 0, opacity: 0.75 }}>
+        Choose a location to view its boxes.
+      </p>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {loading && <p>Loading…</p>}
       {!loading && locations.length === 0 && <p>No locations yet.</p>}
 
       <div style={{ display: "grid", gap: 10 }}>
-        {locations.map((l) => (
-          <a
-            key={l.id}
-            href={`/locations/${l.id}`}
-            style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 18,
-              padding: 14,
-              textDecoration: "none",
-              color: "#111",
-              boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 900 }}>{l.name}</div>
-              <div style={{ fontSize: 13, opacity: 0.7 }}>
-                {(l.boxes?.[0]?.count ?? 0)} box(es)
-              </div>
-            </div>
+        {locations.map((l) => {
+          const boxCount = l.boxes?.[0]?.count ?? 0;
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                requestDelete(l);
-              }}
-              disabled={busy}
+          return (
+            <a
+              key={l.id}
+              href={`/locations/${l.id}`}
               style={{
-                border: "1px solid rgba(239,68,68,0.5)",
-                color: "#b91c1c",
                 background: "#fff",
-                fontWeight: 900,
-                borderRadius: 16,
-                padding: "10px 14px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 18,
+                padding: 14,
+                textDecoration: "none",
+                color: "#111",
+                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
               }}
             >
-              Delete
-            </button>
-          </a>
-        ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontWeight: 900 }}>{l.name}</div>
+
+                {/* ✅ box count badge */}
+                <div
+                  style={{
+                    alignSelf: "flex-start",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    background: "#dcfce7",
+                    color: "#166534",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  {boxCount} box{boxCount === 1 ? "" : "es"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  requestDelete(l);
+                }}
+                disabled={busy}
+                style={{
+                  border: "1px solid rgba(239,68,68,0.5)",
+                  color: "#b91c1c",
+                  background: "#fff",
+                  fontWeight: 900,
+                  borderRadius: 16,
+                  padding: "10px 14px",
+                }}
+              >
+                Delete
+              </button>
+            </a>
+          );
+        })}
       </div>
 
-      {/* FAB: Add Location */}
+      {/* Add Location FAB */}
       <a
         href="/locations/new"
         aria-label="Add location"
@@ -202,19 +204,7 @@ function LocationsInner() {
           zIndex: 2000,
         }}
       >
-        <svg
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
+        +
       </a>
 
       {/* Blocked modal */}
@@ -226,24 +216,11 @@ function LocationsInner() {
           blockedInfoRef.current = null;
         }}
       >
-        <p style={{ marginTop: 0 }}>
-          <strong>{blockedInfoRef.current?.name ?? "This location"}</strong> can’t be deleted because it still contains{" "}
-          <strong>{blockedInfoRef.current?.boxCount ?? 0}</strong> box(es).
+        <p>
+          <strong>{blockedInfoRef.current?.name}</strong> can’t be deleted because
+          it contains <strong>{blockedInfoRef.current?.boxCount}</strong> box(es).
         </p>
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Move or delete the boxes first, then try again.
-        </p>
-
-        <button
-          type="button"
-          onClick={() => {
-            setBlockedOpen(false);
-            blockedInfoRef.current = null;
-          }}
-          style={{ background: "#111", color: "#fff" }}
-        >
-          OK
-        </button>
+        <button onClick={() => setBlockedOpen(false)}>OK</button>
       </Modal>
 
       {/* Delete modal */}
@@ -251,35 +228,21 @@ function LocationsInner() {
         open={confirmDeleteOpen}
         title="Delete location?"
         onClose={() => {
-          if (busy) return;
-          setConfirmDeleteOpen(false);
-          locToDeleteRef.current = null;
+          if (!busy) setConfirmDeleteOpen(false);
         }}
       >
-        <p style={{ marginTop: 0 }}>
-          Delete <strong>{locToDeleteRef.current?.name ?? "this location"}</strong>?
+        <p>
+          Delete <strong>{locToDeleteRef.current?.name}</strong>?
         </p>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setConfirmDeleteOpen(false)}>Cancel</button>
           <button
-            type="button"
-            onClick={() => {
-              if (busy) return;
-              setConfirmDeleteOpen(false);
-              locToDeleteRef.current = null;
-            }}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
             onClick={confirmDelete}
             disabled={busy}
             style={{ background: "#ef4444", color: "#fff" }}
           >
-            {busy ? "Deleting..." : "Delete"}
+            {busy ? "Deleting…" : "Delete"}
           </button>
         </div>
       </Modal>
@@ -287,7 +250,7 @@ function LocationsInner() {
   );
 }
 
-/* ================= MODAL COMPONENT ================= */
+/* ================= MODAL ================= */
 
 function Modal({
   open,
@@ -304,8 +267,6 @@ function Modal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -313,31 +274,23 @@ function Modal({
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.55)",
-        zIndex: 4000,
         display: "flex",
-        alignItems: "flex-end",
         justifyContent: "center",
+        alignItems: "flex-end",
         padding: 12,
+        zIndex: 4000,
       }}
     >
       <div
         style={{
-          width: "min(560px, 100%)",
           background: "#fff",
           borderRadius: 20,
           padding: 16,
-          boxShadow: "0 30px 60px rgba(0,0,0,0.35)",
-          border: "1px solid rgba(0,0,0,0.06)",
+          width: "min(560px,100%)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>{title}</h3>
-          <button type="button" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-
-        <div style={{ marginTop: 12 }}>{children}</div>
+        <h3>{title}</h3>
+        {children}
       </div>
     </div>
   );
