@@ -58,19 +58,15 @@ export default function BurgerMenu() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  /* 🔒 Lock + visually hide background */
+  // ✅ Only lock scroll. Do NOT blur body.
   useEffect(() => {
     if (!open) return;
 
     const prevOverflow = document.body.style.overflow;
-    const prevFilter = document.body.style.filter;
-
     document.body.style.overflow = "hidden";
-    document.body.style.filter = "blur(6px) brightness(0.6)";
 
     return () => {
       document.body.style.overflow = prevOverflow;
-      document.body.style.filter = prevFilter;
     };
   }, [open]);
 
@@ -82,9 +78,13 @@ export default function BurgerMenu() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    setTimeout(() => panelRef.current?.focus(), 10);
+  }, [open]);
+
   const items = useMemo(() => {
     if (!user) return [];
-
     return [
       { label: "Locations", href: "/locations", icon: <IconLocations /> },
       { label: "Boxes", href: "/boxes", icon: <IconBoxes /> },
@@ -104,6 +104,7 @@ export default function BurgerMenu() {
     <>
       {/* Burger button */}
       <button
+        type="button"
         aria-label="Open menu"
         onClick={() => setOpen(true)}
         style={{
@@ -118,26 +119,48 @@ export default function BurgerMenu() {
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
         }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#111"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        >
           <path d="M4 6h16" />
           <path d="M4 12h16" />
           <path d="M4 18h16" />
         </svg>
       </button>
 
+      {/* Overlay + Drawer */}
       {open && (
         <div
           role="dialog"
           aria-modal="true"
-          onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
           style={{
             position: "fixed",
             inset: 0,
             zIndex: 9999,
-            background: "rgba(0,0,0,0.85)",
           }}
         >
-          {/* Drawer */}
+          {/* ✅ Backdrop (dims + optionally blurs ONLY what’s behind it) */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.82)",
+              // this blur affects the BACKDROP layer, not the drawer
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+            }}
+          />
+
+          {/* Drawer (crisp) */}
           <div
             ref={panelRef}
             tabIndex={-1}
@@ -154,12 +177,15 @@ export default function BurgerMenu() {
               display: "flex",
               flexDirection: "column",
               gap: 14,
+              zIndex: 1,
             }}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontWeight: 900, fontSize: 18 }}>Menu</div>
               <button
+                type="button"
                 aria-label="Close menu"
                 onClick={() => setOpen(false)}
                 style={{
@@ -198,6 +224,10 @@ export default function BurgerMenu() {
                   }}
                 />
               )}
+            </div>
+
+            <div style={{ marginTop: "auto", opacity: 0.6, fontSize: 12 }}>
+              Tip: tap outside the menu to close.
             </div>
           </div>
         </div>
