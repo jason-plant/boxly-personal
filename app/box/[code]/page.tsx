@@ -101,6 +101,10 @@ export default function BoxPage() {
   const [editDesc, setEditDesc] = useState("");
   const [editQty, setEditQty] = useState<number>(0);
   const [editRemovePhoto, setEditRemovePhoto] = useState(false);
+
+  // Photo inputs: choose OR take
+  const chooseFileInputRef = useRef<HTMLInputElement | null>(null);
+  const takePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [editNewPhoto, setEditNewPhoto] = useState<File | null>(null);
 
   useEffect(() => {
@@ -231,11 +235,7 @@ export default function BoxPage() {
       return;
     }
 
-    const delRes = await supabase
-      .from("items")
-      .delete()
-      .eq("owner_id", userId)
-      .eq("id", item.id);
+    const delRes = await supabase.from("items").delete().eq("owner_id", userId).eq("id", item.id);
 
     if (delRes.error) {
       setError(delRes.error.message);
@@ -281,11 +281,7 @@ export default function BoxPage() {
       return;
     }
 
-    const res = await supabase
-      .from("items")
-      .update({ quantity: safeQty })
-      .eq("owner_id", userId)
-      .eq("id", itemId);
+    const res = await supabase.from("items").update({ quantity: safeQty }).eq("owner_id", userId).eq("id", itemId);
 
     if (res.error) {
       setError(res.error.message);
@@ -308,6 +304,11 @@ export default function BoxPage() {
     setEditItemOpen(true);
   }
 
+  function onPickNewPhoto(file: File | null) {
+    setEditNewPhoto(file);
+    if (file) setEditRemovePhoto(false);
+  }
+
   async function saveItemEdits() {
     const it = editItemRef.current;
     if (!it || !box) return;
@@ -320,7 +321,6 @@ export default function BoxPage() {
 
     const safeQty = Math.max(0, Math.floor(Number(editQty) || 0));
     if (safeQty === 0) {
-      // keep behaviour consistent: qty 0 means delete prompt
       setEditItemOpen(false);
       editItemRef.current = null;
       setEditNewPhoto(null);
@@ -356,7 +356,7 @@ export default function BoxPage() {
       newPhotoUrl = null;
     }
 
-    // Replace with new photo
+    // Replace with new photo (either camera or file picker)
     if (editNewPhoto) {
       // delete old if present
       if (oldPhotoUrl) {
@@ -406,9 +406,7 @@ export default function BoxPage() {
       return;
     }
 
-    setItems((prev) =>
-      prev.map((x) => (x.id === it.id ? (res.data as ItemRow) : x))
-    );
+    setItems((prev) => prev.map((x) => (x.id === it.id ? (res.data as ItemRow) : x)));
 
     setEditItemOpen(false);
     editItemRef.current = null;
@@ -792,7 +790,6 @@ export default function BoxPage() {
                       </button>
                     </div>
 
-                    {/* ✅ Edit/Delete buttons (only when not moving) */}
                     {!moveMode && (
                       <div style={{ display: "flex", gap: 8 }}>
                         <button
@@ -879,12 +876,6 @@ export default function BoxPage() {
                       +
                     </button>
                   </div>
-
-                  {moveMode && (
-                    <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
-                      Tap card to {isSelected ? "unselect" : "select"}.
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -909,16 +900,7 @@ export default function BoxPage() {
               zIndex: 2000,
             }}
           >
-            <svg
-              width="26"
-              height="26"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -940,23 +922,14 @@ export default function BoxPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
+              boxShadow: "0 14px 30px rgba(0,0,0,0.2)",
               zIndex: 2000,
               cursor: "pointer",
             }}
             title={moveMode ? "Exit move mode" : "Move items"}
             disabled={busy}
           >
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={moveMode ? "white" : "#111"}
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={moveMode ? "white" : "#111"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
               <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
               <path d="M7 5.5c2.5-2 6.5-2 9 0" />
@@ -1008,7 +981,27 @@ export default function BoxPage() {
 
               <button
                 type="button"
-                onClick={requestMoveSelected}
+                onClick={() => {
+                  if (busy) return;
+                  const ids = Array.from(selectedRef.current);
+                  if (ids.length === 0) {
+                    setError("Select at least one item.");
+                    return;
+                  }
+                  if (!bulkDestBoxId) {
+                    setError("Choose a destination box.");
+                    return;
+                  }
+                  const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
+                  confirmMoveInfoRef.current = {
+                    count: ids.length,
+                    fromCode: box.code,
+                    toId: bulkDestBoxId,
+                    toCode: dest?.code ?? "destination",
+                    itemIds: ids,
+                  };
+                  setConfirmMoveOpen(true);
+                }}
                 disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
                 style={{
                   background: "#111",
@@ -1050,176 +1043,25 @@ export default function BoxPage() {
             </div>
           )}
 
-          {/* Create new box modal */}
-          <Modal
-            open={newBoxOpen}
-            title={`Create new box (${nextAutoCode})`}
-            onClose={() => {
-              if (busy) return;
-              setNewBoxOpen(false);
-              setNewBoxName("");
-              setNewBoxLocationId("");
-            }}
-          >
-            <p style={{ marginTop: 0, opacity: 0.85 }}>Enter a name. Code is auto-assigned.</p>
-
-            <input placeholder="Box name" value={newBoxName} onChange={(e) => setNewBoxName(e.target.value)} autoFocus />
-
-            <select
-              value={newBoxLocationId}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "__newloc__") {
-                  setNewLocName("");
-                  setNewLocOpen(true);
-                  return;
-                }
-                setNewBoxLocationId(v);
-              }}
-              disabled={busy}
-            >
-              <option value="">Select location (optional)</option>
-              <option value="__newloc__">➕ Create new location…</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (busy) return;
-                  setNewBoxOpen(false);
-                  setNewBoxName("");
-                  setNewBoxLocationId("");
-                }}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  const created = await createNewBoxFromMove(newBoxName);
-                  if (created) {
-                    setNewBoxOpen(false);
-                    setNewBoxName("");
-                    setNewBoxLocationId("");
-                  }
-                }}
-                disabled={busy || !newBoxName.trim()}
-                style={{ background: "#111", color: "#fff" }}
-              >
-                {busy ? "Creating..." : "Create box"}
-              </button>
-            </div>
-          </Modal>
-
-          {/* Create new location modal */}
-          <Modal
-            open={newLocOpen}
-            title="Create new location"
-            onClose={() => {
-              if (busy) return;
-              setNewLocOpen(false);
-              setNewLocName("");
-            }}
-          >
-            <p style={{ marginTop: 0, opacity: 0.85 }}>Create a location without leaving this flow.</p>
-
-            <input
-              placeholder="Location name (e.g. Shed, Loft)"
-              value={newLocName}
-              onChange={(e) => setNewLocName(e.target.value)}
-              autoFocus
-              disabled={busy}
-            />
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (busy) return;
-                  setNewLocOpen(false);
-                  setNewLocName("");
-                }}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={createLocationInlineForNewBox}
-                disabled={busy || !newLocName.trim()}
-                style={{ background: "#111", color: "#fff" }}
-              >
-                {busy ? "Creating..." : "Create location"}
-              </button>
-            </div>
-          </Modal>
-
-          <Modal
-            open={confirmMoveOpen}
-            title="Confirm move"
-            onClose={() => {
-              if (busy) return;
-              setConfirmMoveOpen(false);
-              confirmMoveInfoRef.current = null;
-            }}
-          >
-            {(() => {
-              const info = confirmMoveInfoRef.current;
-              if (!info) return <p>Missing move info.</p>;
-
-              return (
-                <>
-                  <p style={{ marginTop: 0 }}>
-                    Move <strong>{info.count}</strong> item(s) from <strong>{info.fromCode}</strong> to{" "}
-                    <strong>{info.toCode}</strong>?
-                  </p>
-
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (busy) return;
-                        setConfirmMoveOpen(false);
-                        confirmMoveInfoRef.current = null;
-                      }}
-                      disabled={busy}
-                    >
-                      Cancel
-                    </button>
-
-                    <button type="button" onClick={confirmMoveSelected} disabled={busy} style={{ background: "#111", color: "#fff" }}>
-                      {busy ? "Moving..." : "Yes, move"}
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </Modal>
-
-          {/* ✅ Edit Item Modal */}
+          {/* ✅ Edit Item Modal (with Take Photo + Choose File) */}
           <Modal
             open={editItemOpen}
-            title={`Edit item`}
+            title="Edit item"
             onClose={() => {
               if (busy) return;
               setEditItemOpen(false);
               editItemRef.current = null;
               setEditNewPhoto(null);
               setEditRemovePhoto(false);
+              if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+              if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
             }}
           >
             <p style={{ marginTop: 0, opacity: 0.85 }}>
               Update name/description/quantity and replace (or remove) the photo.
             </p>
+
+            {error && <p style={{ color: "crimson", margin: 0 }}>Error: {error}</p>}
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 800 }}>Name</span>
@@ -1239,16 +1081,8 @@ export default function BoxPage() {
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 800 }}>Quantity</span>
-              <input
-                type="number"
-                min={0}
-                value={editQty}
-                onChange={(e) => setEditQty(Number(e.target.value))}
-                disabled={busy}
-              />
-              <div style={{ opacity: 0.7, fontSize: 13 }}>
-                Setting quantity to 0 will ask to delete the item.
-              </div>
+              <input type="number" min={0} value={editQty} onChange={(e) => setEditQty(Number(e.target.value))} disabled={busy} />
+              <div style={{ opacity: 0.7, fontSize: 13 }}>Setting quantity to 0 will ask to delete the item.</div>
             </label>
 
             <div style={{ display: "grid", gap: 10 }}>
@@ -1258,57 +1092,98 @@ export default function BoxPage() {
                 <img
                   src={editItemRef.current.photo_url}
                   alt="Current"
-                  style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 14, border: "1px solid #e5e7eb" }}
+                  style={{
+                    width: "100%",
+                    maxHeight: 220,
+                    objectFit: "cover",
+                    borderRadius: 14,
+                    border: "1px solid #e5e7eb",
+                  }}
                 />
               )}
 
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontWeight: 800 }}>Replace photo</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null;
-                    setEditNewPhoto(f);
-                    if (f) setEditRemovePhoto(false);
-                  }}
-                  disabled={busy}
-                />
-                <div style={{ opacity: 0.7, fontSize: 13 }}>
-                  Choose a new image to replace the current one.
-                </div>
-              </label>
+              {/* Hidden inputs */}
+              <input
+                ref={chooseFileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => onPickNewPhoto(e.target.files?.[0] ?? null)}
+                disabled={busy}
+              />
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEditRemovePhoto((v) => !v);
-                  if (!editRemovePhoto) setEditNewPhoto(null);
-                }}
-                disabled={busy || !editItemRef.current?.photo_url}
-                style={{
-                  border: "1px solid rgba(239,68,68,0.45)",
-                  color: "#b91c1c",
-                  background: "#fff",
-                  fontWeight: 900,
-                  borderRadius: 16,
-                  padding: "10px 14px",
-                  width: "fit-content",
-                }}
-              >
-                {editRemovePhoto ? "Undo remove photo" : "Remove photo"}
-              </button>
+              <input
+                ref={takePhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={(e) => onPickNewPhoto(e.target.files?.[0] ?? null)}
+                disabled={busy}
+              />
+
+              {/* Buttons: choose vs take */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => chooseFileInputRef.current?.click()}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    background: "#fff",
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                    fontWeight: 900,
+                  }}
+                >
+                  Choose file
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => takePhotoInputRef.current?.click()}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    background: "#fff",
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                    fontWeight: 900,
+                  }}
+                >
+                  Take photo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditRemovePhoto((v) => !v);
+                    if (!editRemovePhoto) {
+                      setEditNewPhoto(null);
+                      if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+                      if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
+                    }
+                  }}
+                  disabled={busy || !editItemRef.current?.photo_url}
+                  style={{
+                    border: "1px solid rgba(239,68,68,0.45)",
+                    color: "#b91c1c",
+                    background: "#fff",
+                    fontWeight: 900,
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                  }}
+                >
+                  {editRemovePhoto ? "Undo remove photo" : "Remove photo"}
+                </button>
+              </div>
 
               {editNewPhoto && (
-                <div style={{ opacity: 0.8, fontSize: 13 }}>
+                <div style={{ opacity: 0.85, fontSize: 13 }}>
                   Selected: <strong>{editNewPhoto.name}</strong>
                 </div>
               )}
-              {editRemovePhoto && (
-                <div style={{ opacity: 0.8, fontSize: 13 }}>
-                  Photo will be removed when you save.
-                </div>
-              )}
+              {editRemovePhoto && <div style={{ opacity: 0.85, fontSize: 13 }}>Photo will be removed when you save.</div>}
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
@@ -1320,24 +1195,21 @@ export default function BoxPage() {
                   editItemRef.current = null;
                   setEditNewPhoto(null);
                   setEditRemovePhoto(false);
+                  if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+                  if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
                 }}
                 disabled={busy}
               >
                 Cancel
               </button>
 
-              <button
-                type="button"
-                onClick={saveItemEdits}
-                disabled={busy || !editName.trim()}
-                style={{ background: "#111", color: "#fff" }}
-              >
+              <button type="button" onClick={saveItemEdits} disabled={busy || !editName.trim()} style={{ background: "#111", color: "#fff" }}>
                 {busy ? "Saving..." : "Save"}
               </button>
             </div>
           </Modal>
 
-          {/* Delete modal (works for qty=0 + delete button) */}
+          {/* Delete modal */}
           <Modal
             open={confirmDeleteOpen}
             title="Delete item?"
@@ -1348,9 +1220,15 @@ export default function BoxPage() {
             }}
           >
             <p style={{ marginTop: 0 }}>
-              {deleteReasonRef.current === "qty0"
-                ? <>Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?</>
-                : <>Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?</>}
+              {deleteReasonRef.current === "qty0" ? (
+                <>
+                  Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+                </>
+              ) : (
+                <>
+                  Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+                </>
+              )}
             </p>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
