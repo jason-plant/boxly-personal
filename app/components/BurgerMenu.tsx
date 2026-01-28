@@ -67,7 +67,7 @@ export default function BurgerMenu() {
   // When open becomes false, wait for animation to finish then unmount.
   useEffect(() => {
     if (open) {
-       const t = setTimeout(() => setMounted(false), 220);
+    setMounted(true);
       return;
     }
     if (!mounted) return;
