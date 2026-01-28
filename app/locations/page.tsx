@@ -27,22 +27,24 @@ function LocationsInner() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const locToDeleteRef = useRef<LocationRow | null>(null);
 
+  // ✅ blocked modal
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const blockedInfoRef = useRef<{ name: string; boxCount: number } | null>(null);
+
   async function load() {
     setLoading(true);
     setError(null);
 
-    // ✅ get current user
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
 
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
       setLocations([]);
       setLoading(false);
       return;
     }
 
-    // ✅ only load THIS user's locations
     const { data, error } = await supabase
       .from("locations")
       .select("id,name")
@@ -63,7 +65,37 @@ function LocationsInner() {
     load();
   }, []);
 
-  function requestDelete(l: LocationRow) {
+  async function requestDelete(l: LocationRow) {
+    setError(null);
+
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
+      return;
+    }
+
+    // ✅ check if location has boxes
+    const boxesRes = await supabase
+      .from("boxes")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", userId)
+      .eq("location_id", l.id);
+
+    if (boxesRes.error) {
+      setError(boxesRes.error.message);
+      return;
+    }
+
+    const count = boxesRes.count ?? 0;
+    if (count > 0) {
+      blockedInfoRef.current = { name: l.name, boxCount: count };
+      setBlockedOpen(true);
+      return;
+    }
+
+    // ok to delete
     locToDeleteRef.current = l;
     setConfirmDeleteOpen(true);
   }
@@ -75,23 +107,7 @@ function LocationsInner() {
     setBusy(true);
     setError(null);
 
-    // ✅ get current user
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    // ✅ only delete if it belongs to THIS user (extra safety)
-    const res = await supabase
-      .from("locations")
-      .delete()
-      .eq("id", l.id)
-      .eq("owner_id", userId);
-
+    const res = await supabase.from("locations").delete().eq("id", l.id);
     if (res.error) {
       setError(res.error.message);
       setBusy(false);
@@ -107,9 +123,7 @@ function LocationsInner() {
   return (
     <main style={{ paddingBottom: 90 }}>
       <h1 style={{ marginTop: 6 }}>Locations</h1>
-      <p style={{ marginTop: 0, opacity: 0.75 }}>
-        Choose a location to view its boxes.
-      </p>
+      <p style={{ marginTop: 0, opacity: 0.75 }}>Choose a location to view its boxes.</p>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {loading && <p>Loading…</p>}
@@ -159,7 +173,7 @@ function LocationsInner() {
         ))}
       </div>
 
-      {/* ✅ FAB: Add Location */}
+      {/* FAB: Add Location */}
       <a
         href="/locations/new"
         aria-label="Add location"
@@ -193,6 +207,35 @@ function LocationsInner() {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </a>
+
+      {/* Blocked modal */}
+      <Modal
+        open={blockedOpen}
+        title="Unable to delete location"
+        onClose={() => {
+          setBlockedOpen(false);
+          blockedInfoRef.current = null;
+        }}
+      >
+        <p style={{ marginTop: 0 }}>
+          <strong>{blockedInfoRef.current?.name ?? "This location"}</strong> can’t be deleted because it still contains{" "}
+          <strong>{blockedInfoRef.current?.boxCount ?? 0}</strong> box(es).
+        </p>
+        <p style={{ marginTop: 0, opacity: 0.85 }}>
+          Move or delete the boxes first, then try again.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setBlockedOpen(false);
+            blockedInfoRef.current = null;
+          }}
+          style={{ background: "#111", color: "#fff" }}
+        >
+          OK
+        </button>
+      </Modal>
 
       {/* Delete modal */}
       <Modal
@@ -279,14 +322,7 @@ function Modal({
           padding: 14,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>{title}</h3>
 
           <button

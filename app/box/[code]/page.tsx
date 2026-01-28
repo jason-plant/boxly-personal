@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../lib/supabaseClient";
@@ -16,6 +16,11 @@ type BoxRow = {
 type BoxMini = {
   id: string;
   code: string;
+};
+
+type LocationRow = {
+  id: string;
+  name: string;
 };
 
 type ItemRow = {
@@ -54,6 +59,9 @@ export default function BoxPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
 
+  // ✅ Locations for "create box" modal
+  const [locations, setLocations] = useState<LocationRow[]>([]);
+
   // Photo viewer
   const [viewItem, setViewItem] = useState<ItemRow | null>(null);
 
@@ -66,6 +74,11 @@ export default function BoxPage() {
   // Modals
   const [newBoxOpen, setNewBoxOpen] = useState(false);
   const [newBoxName, setNewBoxName] = useState("");
+
+  // ✅ "Create new location" inside create box modal
+  const [newLocOpen, setNewLocOpen] = useState(false);
+  const [newLocName, setNewLocName] = useState("");
+  const [newBoxLocationId, setNewBoxLocationId] = useState<string>("");
 
   const [confirmMoveOpen, setConfirmMoveOpen] = useState(false);
   const confirmMoveInfoRef = useRef<{
@@ -86,43 +99,39 @@ export default function BoxPage() {
       setLoading(true);
       setError(null);
 
-      // ✅ current user
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      const userId = authData.user?.id;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
 
-      if (authErr || !userId) {
-        setError(authErr?.message || "Not logged in.");
+      if (!userId) {
+        setError("Not logged in.");
         setLoading(false);
         return;
       }
 
-      // ✅ box must belong to this user (code + owner_id)
       const boxRes = await supabase
         .from("boxes")
         .select("id, code, name, location")
-        .eq("code", code)
         .eq("owner_id", userId)
+        .eq("code", code)
         .maybeSingle();
 
       if (!boxRes.data || boxRes.error) {
         setError("Box not found");
-        setBox(null);
         setLoading(false);
         return;
       }
 
-      setBox(boxRes.data as BoxRow);
+      setBox(boxRes.data);
 
-      // items for this box id
       const itemsRes = await supabase
         .from("items")
         .select("id, name, description, photo_url, quantity")
+        .eq("owner_id", userId)
         .eq("box_id", boxRes.data.id)
         .order("name");
 
-      setItems((itemsRes.data ?? []) as ItemRow[]);
+      setItems(itemsRes.data ?? []);
 
-      // ✅ only this user's boxes for move dropdown + auto code
       const boxesRes = await supabase
         .from("boxes")
         .select("id, code")
@@ -130,6 +139,14 @@ export default function BoxPage() {
         .order("code");
 
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
+
+      const locRes = await supabase
+        .from("locations")
+        .select("id, name")
+        .eq("owner_id", userId)
+        .order("name");
+
+      setLocations((locRes.data ?? []) as LocationRow[]);
 
       // reset move state
       setMoveMode(false);
@@ -143,6 +160,9 @@ export default function BoxPage() {
       setConfirmMoveOpen(false);
       setConfirmDeleteOpen(false);
       setNewBoxName("");
+      setNewBoxLocationId("");
+      setNewLocOpen(false);
+      setNewLocName("");
       confirmMoveInfoRef.current = null;
       deleteItemRef.current = null;
 
@@ -153,13 +173,18 @@ export default function BoxPage() {
   }, [code]);
 
   async function reloadItems(boxId: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return;
+
     const { data } = await supabase
       .from("items")
       .select("id, name, description, photo_url, quantity")
+      .eq("owner_id", userId)
       .eq("box_id", boxId)
       .order("name");
 
-    setItems((data ?? []) as ItemRow[]);
+    setItems(data ?? []);
   }
 
   /* ============= Quantity & Delete ============= */
@@ -184,7 +209,6 @@ export default function BoxPage() {
 
     setItems((prev) => prev.filter((i) => i.id !== item.id));
 
-    // also remove from selection if selected
     setSelectedIds((prev) => {
       const copy = new Set(prev);
       copy.delete(item.id);
@@ -206,11 +230,7 @@ export default function BoxPage() {
       return;
     }
 
-    const res = await supabase
-      .from("items")
-      .update({ quantity: safeQty })
-      .eq("id", itemId);
-
+    const res = await supabase.from("items").update({ quantity: safeQty }).eq("id", itemId);
     if (res.error) {
       setError(res.error.message);
       return;
@@ -267,32 +287,72 @@ export default function BoxPage() {
     selectedRef.current = empty;
   }
 
-  async function createNewBoxFromMove(name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Box name is required.");
-      return null;
+  async function createLocationInlineForNewBox() {
+    const trimmed = newLocName.trim();
+    if (!trimmed) return;
+
+    setBusy(true);
+    setError(null);
+
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
     }
 
-    // ✅ current user
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
+    const res = await supabase
+      .from("locations")
+      .insert({ owner_id: userId, name: trimmed })
+      .select("id, name")
+      .single();
 
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to create location.");
+      setBusy(false);
+      return;
+    }
+
+    setLocations((prev) => {
+      const next = [...prev, res.data as LocationRow];
+      next.sort((a, b) => a.name.localeCompare(b.name));
+      return next;
+    });
+
+    setNewBoxLocationId(res.data.id);
+    setNewLocOpen(false);
+    setNewLocName("");
+    setBusy(false);
+  }
+
+  async function createNewBoxFromMove(name: string) {
+    if (!name.trim()) {
+      setError("Box name is required.");
       return null;
     }
 
     setBusy(true);
     setError(null);
 
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
+      setBusy(false);
+      return null;
+    }
+
     const insertRes = await supabase
       .from("boxes")
       .insert({
-        owner_id: userId, // ✅ per-user
+        owner_id: userId,
         code: nextAutoCode,
-        name: trimmed,
-        location: null,
+        name: name.trim(),
+        // ✅ assign location_id if selected
+        location_id: newBoxLocationId || null,
       })
       .select("id, code")
       .single();
@@ -319,6 +379,7 @@ export default function BoxPage() {
     if (value === "__new__") {
       setBulkDestBoxId("");
       setNewBoxName("");
+      setNewBoxLocationId("");
       setNewBoxOpen(true);
       return;
     }
@@ -361,10 +422,7 @@ export default function BoxPage() {
     setBusy(true);
     setError(null);
 
-    const res = await supabase
-      .from("items")
-      .update({ box_id: info.toId })
-      .in("id", info.itemIds);
+    const res = await supabase.from("items").update({ box_id: info.toId }).in("id", info.itemIds);
 
     if (res.error) {
       setError(res.error.message);
@@ -406,8 +464,6 @@ export default function BoxPage() {
     `);
   }
 
-  /* ============= Render ============= */
-
   const destinationBoxes = box ? allBoxes.filter((b) => b.id !== box.id) : [];
 
   return (
@@ -422,7 +478,6 @@ export default function BoxPage() {
         </main>
       ) : (
         <main style={{ paddingBottom: 180 }}>
-          {/* Header */}
           <div
             style={{
               background: "#fff",
@@ -445,7 +500,6 @@ export default function BoxPage() {
             {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
           </div>
 
-          {/* Move Mode panel */}
           {moveMode && (
             <div
               style={{
@@ -482,7 +536,6 @@ export default function BoxPage() {
             </div>
           )}
 
-          {/* Items */}
           <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
 
           <div style={{ display: "grid", gap: 10 }}>
@@ -550,7 +603,6 @@ export default function BoxPage() {
 
                   {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
 
-                  {/* Quantity controls */}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                     <button
                       type="button"
@@ -603,7 +655,6 @@ export default function BoxPage() {
             })}
           </div>
 
-          {/* Floating Add Item FAB */}
           <a
             href={`/box/${encodeURIComponent(box.code)}/new-item`}
             aria-label="Add item"
@@ -629,7 +680,6 @@ export default function BoxPage() {
             </svg>
           </a>
 
-          {/* Floating Move FAB */}
           <button
             type="button"
             onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
@@ -665,7 +715,6 @@ export default function BoxPage() {
             </svg>
           </button>
 
-          {/* Sticky Move Action Bar */}
           {moveMode && (
             <div
               style={{
@@ -716,7 +765,6 @@ export default function BoxPage() {
             </div>
           )}
 
-          {/* Full screen photo viewer */}
           {!moveMode && viewItem && viewItem.photo_url && (
             <div
               onClick={() => setViewItem(null)}
@@ -735,7 +783,7 @@ export default function BoxPage() {
             </div>
           )}
 
-          {/* Create new box modal */}
+          {/* ✅ Create new box modal (now supports location + create location inline) */}
           <Modal
             open={newBoxOpen}
             title={`Create new box (${nextAutoCode})`}
@@ -743,11 +791,34 @@ export default function BoxPage() {
               if (busy) return;
               setNewBoxOpen(false);
               setNewBoxName("");
+              setNewBoxLocationId("");
             }}
           >
             <p style={{ marginTop: 0, opacity: 0.85 }}>Enter a name. Code is auto-assigned.</p>
 
             <input placeholder="Box name" value={newBoxName} onChange={(e) => setNewBoxName(e.target.value)} autoFocus />
+
+            <select
+              value={newBoxLocationId}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__newloc__") {
+                  setNewLocName("");
+                  setNewLocOpen(true);
+                  return;
+                }
+                setNewBoxLocationId(v);
+              }}
+              disabled={busy}
+            >
+              <option value="">Select location (optional)</option>
+              <option value="__newloc__">➕ Create new location…</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
               <button
@@ -756,6 +827,7 @@ export default function BoxPage() {
                   if (busy) return;
                   setNewBoxOpen(false);
                   setNewBoxName("");
+                  setNewBoxLocationId("");
                 }}
                 disabled={busy}
               >
@@ -769,6 +841,7 @@ export default function BoxPage() {
                   if (created) {
                     setNewBoxOpen(false);
                     setNewBoxName("");
+                    setNewBoxLocationId("");
                   }
                 }}
                 disabled={busy || !newBoxName.trim()}
@@ -779,7 +852,50 @@ export default function BoxPage() {
             </div>
           </Modal>
 
-          {/* Confirm move modal */}
+          {/* ✅ Create new location modal */}
+          <Modal
+            open={newLocOpen}
+            title="Create new location"
+            onClose={() => {
+              if (busy) return;
+              setNewLocOpen(false);
+              setNewLocName("");
+            }}
+          >
+            <p style={{ marginTop: 0, opacity: 0.85 }}>Create a location without leaving this flow.</p>
+
+            <input
+              placeholder="Location name (e.g. Shed, Loft)"
+              value={newLocName}
+              onChange={(e) => setNewLocName(e.target.value)}
+              autoFocus
+              disabled={busy}
+            />
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (busy) return;
+                  setNewLocOpen(false);
+                  setNewLocName("");
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={createLocationInlineForNewBox}
+                disabled={busy || !newLocName.trim()}
+                style={{ background: "#111", color: "#fff" }}
+              >
+                {busy ? "Creating..." : "Create location"}
+              </button>
+            </div>
+          </Modal>
+
           <Modal
             open={confirmMoveOpen}
             title="Confirm move"
@@ -822,7 +938,6 @@ export default function BoxPage() {
             })()}
           </Modal>
 
-          {/* Confirm delete modal */}
           <Modal
             open={confirmDeleteOpen}
             title="Delete item?"
