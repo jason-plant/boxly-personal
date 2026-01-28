@@ -155,8 +155,8 @@ export default function BurgerMenu() {
               inset: 0,
               background: "rgba(0,0,0,0.82)",
               // this blur affects the BACKDROP layer, not the drawer
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
             }}
           />
 
