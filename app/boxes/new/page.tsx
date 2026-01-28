@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import RequireAuth from "../../components/RequireAuth";
 
@@ -32,6 +32,10 @@ export default function NewBoxPage() {
 
 function NewBoxInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const initialLocationId = searchParams.get("locationId") ?? "";
+  const returnTo = searchParams.get("returnTo") ?? "";
 
   const [existingCodes, setExistingCodes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationRow[]>([]);
@@ -42,7 +46,7 @@ function NewBoxInner() {
 
   // ✅ user-visible fields only
   const [name, setName] = useState("");
-  const [locationId, setLocationId] = useState<string>("");
+  const [locationId, setLocationId] = useState<string>(initialLocationId);
 
   // Inline "create location" modal
   const [newLocOpen, setNewLocOpen] = useState(false);
@@ -89,7 +93,13 @@ function NewBoxInner() {
       setError((prev) => prev ?? locRes.error.message);
       setLocations([]);
     } else {
-      setLocations((locRes.data ?? []) as LocationRow[]);
+      const locs = (locRes.data ?? []) as LocationRow[];
+      setLocations(locs);
+
+      // if locationId came from querystring but doesn't exist, clear it
+      if (locationId && !locs.some((l) => l.id === locationId)) {
+        setLocationId("");
+      }
     }
 
     setLoading(false);
@@ -97,6 +107,7 @@ function NewBoxInner() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const nextAutoCode = useMemo(() => {
@@ -186,20 +197,19 @@ function NewBoxInner() {
     setBusy(true);
     setError(null);
 
-    // First try with current nextAutoCode
+    // Try with current nextAutoCode
     let result = await tryInsertWithCode(nextAutoCode);
 
-    // If it collided (e.g. someone created same code), reload codes and try once more
+    // If it collided, reload and try once more
     if (!result.ok) {
       await loadData();
-      const retryCode = (() => {
-        let max = 0;
-        for (const c of existingCodes) {
-          const n = parseBoxNumber(c);
-          if (n !== null && n > max) max = n;
-        }
-        return `BOX-${pad3(max + 1)}`;
-      })();
+      // compute a fresh next code after reload
+      let max = 0;
+      for (const c of existingCodes) {
+        const n = parseBoxNumber(c);
+        if (n !== null && n > max) max = n;
+      }
+      const retryCode = `BOX-${pad3(max + 1)}`;
 
       result = await tryInsertWithCode(retryCode);
     }
@@ -210,7 +220,9 @@ function NewBoxInner() {
       return;
     }
 
-    router.push("/boxes");
+    // ✅ return to location if provided, otherwise boxes list
+    const dest = returnTo ? decodeURIComponent(returnTo) : "/boxes";
+    router.push(dest);
     router.refresh();
   }
 
@@ -257,7 +269,14 @@ function NewBoxInner() {
           </select>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => router.push("/boxes")} disabled={busy}>
+            <button
+              type="button"
+              onClick={() => {
+                if (returnTo) router.push(decodeURIComponent(returnTo));
+                else router.push("/boxes");
+              }}
+              disabled={busy}
+            >
               Cancel
             </button>
 
