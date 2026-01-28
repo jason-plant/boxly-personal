@@ -59,7 +59,7 @@ export default function BoxPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
 
-  // ✅ Locations for "create box" modal
+  // Locations for "create box" modal
   const [locations, setLocations] = useState<LocationRow[]>([]);
 
   // Photo viewer
@@ -75,7 +75,7 @@ export default function BoxPage() {
   const [newBoxOpen, setNewBoxOpen] = useState(false);
   const [newBoxName, setNewBoxName] = useState("");
 
-  // ✅ "Create new location" inside create box modal
+  // "Create new location" inside create box modal
   const [newLocOpen, setNewLocOpen] = useState(false);
   const [newLocName, setNewLocName] = useState("");
   const [newBoxLocationId, setNewBoxLocationId] = useState<string>("");
@@ -89,8 +89,19 @@ export default function BoxPage() {
     itemIds: string[];
   } | null>(null);
 
+  // Delete item modal
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteItemRef = useRef<ItemRow | null>(null);
+  const deleteReasonRef = useRef<"qty0" | "button">("button");
+
+  // ✅ Edit item modal (name/desc/qty/photo replace)
+  const [editItemOpen, setEditItemOpen] = useState(false);
+  const editItemRef = useRef<ItemRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editQty, setEditQty] = useState<number>(0);
+  const [editRemovePhoto, setEditRemovePhoto] = useState(false);
+  const [editNewPhoto, setEditNewPhoto] = useState<File | null>(null);
 
   useEffect(() => {
     if (!code) return;
@@ -165,6 +176,16 @@ export default function BoxPage() {
       setNewLocName("");
       confirmMoveInfoRef.current = null;
       deleteItemRef.current = null;
+      deleteReasonRef.current = "button";
+
+      // edit modal reset
+      setEditItemOpen(false);
+      editItemRef.current = null;
+      setEditName("");
+      setEditDesc("");
+      setEditQty(0);
+      setEditRemovePhoto(false);
+      setEditNewPhoto(null);
 
       setLoading(false);
     }
@@ -187,12 +208,13 @@ export default function BoxPage() {
     setItems(data ?? []);
   }
 
-  /* ============= Quantity & Delete ============= */
+  /* ============= Delete ============= */
 
   async function deleteItemAndPhoto(item: ItemRow) {
     setBusy(true);
     setError(null);
 
+    // delete photo (best effort)
     if (item.photo_url) {
       const path = getStoragePathFromPublicUrl(item.photo_url);
       if (path) {
@@ -200,7 +222,21 @@ export default function BoxPage() {
       }
     }
 
-    const delRes = await supabase.from("items").delete().eq("id", item.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    const delRes = await supabase
+      .from("items")
+      .delete()
+      .eq("owner_id", userId)
+      .eq("id", item.id);
+
     if (delRes.error) {
       setError(delRes.error.message);
       setBusy(false);
@@ -219,24 +255,166 @@ export default function BoxPage() {
     setBusy(false);
   }
 
+  function requestDeleteItem(item: ItemRow, reason: "qty0" | "button") {
+    deleteItemRef.current = item;
+    deleteReasonRef.current = reason;
+    setConfirmDeleteOpen(true);
+  }
+
+  /* ============= Quantity ============= */
+
   async function saveQuantity(itemId: string, qty: number) {
     const safeQty = Math.max(0, Math.floor(qty));
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
 
     if (safeQty === 0) {
-      deleteItemRef.current = item;
-      setConfirmDeleteOpen(true);
+      requestDeleteItem(item, "qty0");
       return;
     }
 
-    const res = await supabase.from("items").update({ quantity: safeQty }).eq("id", itemId);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      return;
+    }
+
+    const res = await supabase
+      .from("items")
+      .update({ quantity: safeQty })
+      .eq("owner_id", userId)
+      .eq("id", itemId);
+
     if (res.error) {
       setError(res.error.message);
       return;
     }
 
     setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantity: safeQty } : i)));
+  }
+
+  /* ============= Edit Item (name/desc/qty/photo replace) ============= */
+
+  function openEditItem(i: ItemRow) {
+    setError(null);
+    editItemRef.current = i;
+    setEditName(i.name ?? "");
+    setEditDesc(i.description ?? "");
+    setEditQty(i.quantity ?? 0);
+    setEditRemovePhoto(false);
+    setEditNewPhoto(null);
+    setEditItemOpen(true);
+  }
+
+  async function saveItemEdits() {
+    const it = editItemRef.current;
+    if (!it || !box) return;
+
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setError("Item name is required.");
+      return;
+    }
+
+    const safeQty = Math.max(0, Math.floor(Number(editQty) || 0));
+    if (safeQty === 0) {
+      // keep behaviour consistent: qty 0 means delete prompt
+      setEditItemOpen(false);
+      editItemRef.current = null;
+      setEditNewPhoto(null);
+      setEditRemovePhoto(false);
+      requestDeleteItem(it, "qty0");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    // Photo handling
+    let newPhotoUrl: string | null = it.photo_url ?? null;
+    const oldPhotoUrl = it.photo_url;
+
+    // Remove existing photo
+    if (editRemovePhoto) {
+      if (oldPhotoUrl) {
+        const oldPath = getStoragePathFromPublicUrl(oldPhotoUrl);
+        if (oldPath) {
+          await supabase.storage.from("item-photos").remove([oldPath]);
+        }
+      }
+      newPhotoUrl = null;
+    }
+
+    // Replace with new photo
+    if (editNewPhoto) {
+      // delete old if present
+      if (oldPhotoUrl) {
+        const oldPath = getStoragePathFromPublicUrl(oldPhotoUrl);
+        if (oldPath) {
+          await supabase.storage.from("item-photos").remove([oldPath]);
+        }
+      }
+
+      const safeName = editNewPhoto.name.replace(/[^\w.\-]+/g, "_");
+      const path = `${userId}/${it.id}/${Date.now()}-${safeName}`;
+
+      const uploadRes = await supabase.storage.from("item-photos").upload(path, editNewPhoto, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: editNewPhoto.type || "image/jpeg",
+      });
+
+      if (uploadRes.error) {
+        setError(uploadRes.error.message);
+        setBusy(false);
+        return;
+      }
+
+      const pub = supabase.storage.from("item-photos").getPublicUrl(path);
+      newPhotoUrl = pub.data.publicUrl;
+    }
+
+    const updatePayload = {
+      name: trimmedName,
+      description: editDesc.trim() ? editDesc.trim() : null,
+      quantity: safeQty,
+      photo_url: newPhotoUrl,
+    };
+
+    const res = await supabase
+      .from("items")
+      .update(updatePayload)
+      .eq("owner_id", userId)
+      .eq("id", it.id)
+      .select("id, name, description, photo_url, quantity")
+      .single();
+
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to update item.");
+      setBusy(false);
+      return;
+    }
+
+    setItems((prev) =>
+      prev.map((x) => (x.id === it.id ? (res.data as ItemRow) : x))
+    );
+
+    setEditItemOpen(false);
+    editItemRef.current = null;
+    setEditNewPhoto(null);
+    setEditRemovePhoto(false);
+    setBusy(false);
   }
 
   /* ============= Move Mode ============= */
@@ -351,7 +529,6 @@ export default function BoxPage() {
         owner_id: userId,
         code: nextAutoCode,
         name: name.trim(),
-        // ✅ assign location_id if selected
         location_id: newBoxLocationId || null,
       })
       .select("id, code")
@@ -422,7 +599,20 @@ export default function BoxPage() {
     setBusy(true);
     setError(null);
 
-    const res = await supabase.from("items").update({ box_id: info.toId }).in("id", info.itemIds);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    const res = await supabase
+      .from("items")
+      .update({ box_id: info.toId })
+      .eq("owner_id", userId)
+      .in("id", info.itemIds);
 
     if (res.error) {
       setError(res.error.message);
@@ -558,47 +748,92 @@ export default function BoxPage() {
                     cursor: moveMode ? "pointer" : "default",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {moveMode && (
-                      <div
-                        aria-hidden
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 999,
-                          border: isSelected ? "2px solid #16a34a" : "2px solid #cbd5e1",
-                          background: isSelected ? "#16a34a" : "transparent",
-                          flex: "0 0 auto",
-                        }}
-                      />
-                    )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {moveMode && (
+                        <div
+                          aria-hidden
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 999,
+                            border: isSelected ? "2px solid #16a34a" : "2px solid #cbd5e1",
+                            background: isSelected ? "#16a34a" : "transparent",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (moveMode) return;
-                        if (hasPhoto) setViewItem(i);
-                      }}
-                      disabled={moveMode || !hasPhoto}
-                      style={{
-                        padding: 0,
-                        border: "none",
-                        background: "transparent",
-                        boxShadow: "none",
-                        textAlign: "left",
-                        fontWeight: 900,
-                        cursor: !moveMode && hasPhoto ? "pointer" : "default",
-                        opacity: 1,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                      title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
-                    >
-                      {i.name}
-                      {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (moveMode) return;
+                          if (hasPhoto) setViewItem(i);
+                        }}
+                        disabled={moveMode || !hasPhoto}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          boxShadow: "none",
+                          textAlign: "left",
+                          fontWeight: 900,
+                          cursor: !moveMode && hasPhoto ? "pointer" : "default",
+                          opacity: 1,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                        title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
+                      >
+                        {i.name}
+                        {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
+                      </button>
+                    </div>
+
+                    {/* ✅ Edit/Delete buttons (only when not moving) */}
+                    {!moveMode && (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditItem(i);
+                          }}
+                          disabled={busy}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            color: "#111",
+                            background: "#fff",
+                            fontWeight: 900,
+                            borderRadius: 16,
+                            padding: "10px 14px",
+                          }}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestDeleteItem(i, "button");
+                          }}
+                          disabled={busy}
+                          style={{
+                            border: "1px solid rgba(239,68,68,0.45)",
+                            color: "#b91c1c",
+                            background: "#fff",
+                            fontWeight: 900,
+                            borderRadius: 16,
+                            padding: "10px 14px",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
@@ -674,7 +909,16 @@ export default function BoxPage() {
               zIndex: 2000,
             }}
           >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -703,7 +947,16 @@ export default function BoxPage() {
             title={moveMode ? "Exit move mode" : "Move items"}
             disabled={busy}
           >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={moveMode ? "white" : "#111"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={moveMode ? "white" : "#111"}
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
               <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
               <path d="M7 5.5c2.5-2 6.5-2 9 0" />
@@ -737,7 +990,12 @@ export default function BoxPage() {
               <div style={{ fontWeight: 900 }}>Selected: {selectedIds.size}</div>
 
               <div style={{ flex: 1, minWidth: 160 }}>
-                <select value={bulkDestBoxId} onChange={(e) => onDestinationChange(e.target.value)} disabled={busy} style={{ width: "100%" }}>
+                <select
+                  value={bulkDestBoxId}
+                  onChange={(e) => onDestinationChange(e.target.value)}
+                  disabled={busy}
+                  style={{ width: "100%" }}
+                >
                   <option value="">Destination…</option>
                   <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
                   {destinationBoxes.map((b) => (
@@ -779,11 +1037,20 @@ export default function BoxPage() {
                 padding: 12,
               }}
             >
-              <img src={viewItem.photo_url} alt={viewItem.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }} />
+              <img
+                src={viewItem.photo_url}
+                alt={viewItem.name}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  objectFit: "contain",
+                  borderRadius: 16,
+                }}
+              />
             </div>
           )}
 
-          {/* ✅ Create new box modal (now supports location + create location inline) */}
+          {/* Create new box modal */}
           <Modal
             open={newBoxOpen}
             title={`Create new box (${nextAutoCode})`}
@@ -852,7 +1119,7 @@ export default function BoxPage() {
             </div>
           </Modal>
 
-          {/* ✅ Create new location modal */}
+          {/* Create new location modal */}
           <Modal
             open={newLocOpen}
             title="Create new location"
@@ -938,6 +1205,139 @@ export default function BoxPage() {
             })()}
           </Modal>
 
+          {/* ✅ Edit Item Modal */}
+          <Modal
+            open={editItemOpen}
+            title={`Edit item`}
+            onClose={() => {
+              if (busy) return;
+              setEditItemOpen(false);
+              editItemRef.current = null;
+              setEditNewPhoto(null);
+              setEditRemovePhoto(false);
+            }}
+          >
+            <p style={{ marginTop: 0, opacity: 0.85 }}>
+              Update name/description/quantity and replace (or remove) the photo.
+            </p>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Name</span>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Item name" autoFocus disabled={busy} />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Description</span>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                placeholder="Optional description"
+                disabled={busy}
+                style={{ minHeight: 90 }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Quantity</span>
+              <input
+                type="number"
+                min={0}
+                value={editQty}
+                onChange={(e) => setEditQty(Number(e.target.value))}
+                disabled={busy}
+              />
+              <div style={{ opacity: 0.7, fontSize: 13 }}>
+                Setting quantity to 0 will ask to delete the item.
+              </div>
+            </label>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ fontWeight: 900 }}>Photo</div>
+
+              {editItemRef.current?.photo_url && !editRemovePhoto && !editNewPhoto && (
+                <img
+                  src={editItemRef.current.photo_url}
+                  alt="Current"
+                  style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 14, border: "1px solid #e5e7eb" }}
+                />
+              )}
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontWeight: 800 }}>Replace photo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setEditNewPhoto(f);
+                    if (f) setEditRemovePhoto(false);
+                  }}
+                  disabled={busy}
+                />
+                <div style={{ opacity: 0.7, fontSize: 13 }}>
+                  Choose a new image to replace the current one.
+                </div>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditRemovePhoto((v) => !v);
+                  if (!editRemovePhoto) setEditNewPhoto(null);
+                }}
+                disabled={busy || !editItemRef.current?.photo_url}
+                style={{
+                  border: "1px solid rgba(239,68,68,0.45)",
+                  color: "#b91c1c",
+                  background: "#fff",
+                  fontWeight: 900,
+                  borderRadius: 16,
+                  padding: "10px 14px",
+                  width: "fit-content",
+                }}
+              >
+                {editRemovePhoto ? "Undo remove photo" : "Remove photo"}
+              </button>
+
+              {editNewPhoto && (
+                <div style={{ opacity: 0.8, fontSize: 13 }}>
+                  Selected: <strong>{editNewPhoto.name}</strong>
+                </div>
+              )}
+              {editRemovePhoto && (
+                <div style={{ opacity: 0.8, fontSize: 13 }}>
+                  Photo will be removed when you save.
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (busy) return;
+                  setEditItemOpen(false);
+                  editItemRef.current = null;
+                  setEditNewPhoto(null);
+                  setEditRemovePhoto(false);
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={saveItemEdits}
+                disabled={busy || !editName.trim()}
+                style={{ background: "#111", color: "#fff" }}
+              >
+                {busy ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </Modal>
+
+          {/* Delete modal (works for qty=0 + delete button) */}
           <Modal
             open={confirmDeleteOpen}
             title="Delete item?"
@@ -948,7 +1348,9 @@ export default function BoxPage() {
             }}
           >
             <p style={{ marginTop: 0 }}>
-              Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+              {deleteReasonRef.current === "qty0"
+                ? <>Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?</>
+                : <>Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?</>}
             </p>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
