@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../lib/auth";
 
@@ -55,38 +56,45 @@ export default function BurgerMenu() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
-  // open = target state
   const [open, setOpen] = useState(false);
 
-  // mounted = keep DOM around to play close animation
+  // Keep mounted for close animation
   const [mounted, setMounted] = useState(false);
+
+  // Portal readiness (prevents SSR issues)
+  const [portalReady, setPortalReady] = useState(false);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // When open becomes true, mount immediately.
-  // When open becomes false, wait for animation to finish then unmount.
+  // portal ready after mount
+  useEffect(() => setPortalReady(true), []);
+
+  // Mount/unmount for animation
   useEffect(() => {
     if (open) {
-    setMounted(true);
+      setMounted(true);
       return;
     }
     if (!mounted) return;
-
-    const t = setTimeout(() => setMounted(false), 220); // match CSS duration
+    const t = setTimeout(() => setMounted(false), 220);
     return () => clearTimeout(t);
   }, [open, mounted]);
 
-  // Lock scroll only while mounted (overlay exists)
+  // ✅ Apply blur to background via body class (reliable everywhere)
   useEffect(() => {
     if (!mounted) return;
+
+    document.body.classList.add("menu-open");
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
+      document.body.classList.remove("menu-open");
       document.body.style.overflow = prevOverflow;
     };
   }, [mounted]);
 
-  // Escape key
+  // Escape to close
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -95,7 +103,7 @@ export default function BurgerMenu() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [mounted]);
 
-  // focus drawer on open
+  // Focus drawer on open
   useEffect(() => {
     if (!open) return;
     setTimeout(() => panelRef.current?.focus(), 10);
@@ -115,11 +123,111 @@ export default function BurgerMenu() {
 
   function go(href: string) {
     setOpen(false);
-    // Wait for close animation then navigate (feels smoother)
-    setTimeout(() => {
-      router.push(href);
-    }, 100);
+    setTimeout(() => router.push(href), 200);
   }
+
+  const overlay = mounted ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setOpen(false);
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+      }}
+    >
+      {/* Backdrop (dim only; blur is handled by #app-shell filter) */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: open ? "rgba(0,0,0,0.82)" : "rgba(0,0,0,0)",
+          transition: "background 220ms ease",
+        }}
+      />
+
+      {/* Drawer */}
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          height: "100%",
+          width: "min(86vw, 340px)",
+          background: "#fff",
+          borderLeft: "1px solid #e5e7eb",
+          boxShadow: "-20px 0 60px rgba(0,0,0,0.35)",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          zIndex: 1,
+
+          // ✅ slide animation
+          transform: open ? "translateX(0)" : "translateX(16px)",
+          opacity: open ? 1 : 0,
+          transition: "transform 220ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 900, fontSize: 18 }}>Menu</div>
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              fontWeight: 900,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Menu list */}
+        <div style={{ display: "grid", gap: 10 }}>
+          {items.map((it) => (
+            <MenuRow
+              key={it.href}
+              icon={it.icon}
+              label={it.label}
+              active={pathname === it.href || pathname.startsWith(it.href + "/")}
+              onClick={() => go(it.href)}
+            />
+          ))}
+
+          {user && (
+            <MenuRow
+              icon={<IconLogout />}
+              label="Log out"
+              onClick={async () => {
+                setOpen(false);
+                setTimeout(async () => {
+                  await signOut();
+                  router.push("/login");
+                }, 200);
+              }}
+            />
+          )}
+        </div>
+
+        <div style={{ marginTop: "auto", opacity: 0.6, fontSize: 12 }}>
+          Tip: tap outside the menu to close.
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -155,111 +263,8 @@ export default function BurgerMenu() {
         </svg>
       </button>
 
-      {/* Overlay + Drawer (mounted for open/close animation) */}
-      {mounted && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-          }}
-        >
-          {/* Backdrop */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: open ? "rgba(0,0,0,0.82)" : "rgba(0,0,0,0)",
-              backdropFilter: open ? "blur(6px)" : "blur(0px)",
-              WebkitBackdropFilter: open ? "blur(6px)" : "blur(0px)",
-              transition: "background 220ms ease, backdrop-filter 220ms ease",
-            }}
-          />
-
-          {/* Drawer */}
-          <div
-            ref={panelRef}
-            tabIndex={-1}
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              height: "100%",
-              width: "min(86vw, 340px)",
-              background: "#fff",
-              borderLeft: "1px solid #e5e7eb",
-              boxShadow: "-20px 0 60px rgba(0,0,0,0.35)",
-              padding: 16,
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-              zIndex: 1,
-
-              // ✅ animation
-              transform: open ? "translateX(0)" : "translateX(16px)",
-              opacity: open ? 1 : 0,
-              transition: "transform 220ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease",
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 18 }}>Menu</div>
-              <button
-                type="button"
-                aria-label="Close menu"
-                onClick={() => setOpen(false)}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
-                  fontWeight: 900,
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Menu list */}
-            <div style={{ display: "grid", gap: 10 }}>
-              {items.map((it) => (
-                <MenuRow
-                  key={it.href}
-                  icon={it.icon}
-                  label={it.label}
-                  active={pathname === it.href || pathname.startsWith(it.href + "/")}
-                  onClick={() => go(it.href)}
-                />
-              ))}
-
-              {user && (
-                <MenuRow
-                  icon={<IconLogout />}
-                  label="Log out"
-                  onClick={async () => {
-                    setOpen(false);
-                    setTimeout(async () => {
-                      await signOut();
-                      router.push("/login");
-                    }, 200);
-                  }}
-                />
-              )}
-            </div>
-
-            <div style={{ marginTop: "auto", opacity: 0.6, fontSize: 12 }}>
-              Tip: tap outside the menu to close.
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Portal render (so drawer stays crisp while #app-shell blurs) */}
+      {portalReady && overlay ? createPortal(overlay, document.body) : null}
     </>
   );
 }
