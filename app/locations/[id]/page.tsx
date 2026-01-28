@@ -19,6 +19,7 @@ type BoxRow = {
   id: string;
   code: string;
   name: string | null;
+  items?: { quantity: number | null }[];
 };
 
 const cardStyle: React.CSSProperties = {
@@ -128,10 +129,10 @@ function LocationInner() {
       setAllLocations((allLocRes.data ?? []) as LocationMini[]);
     }
 
-    // Boxes in this location (must belong to user)
+    // Boxes in this location + item quantities (must belong to user)
     const boxRes = await supabase
       .from("boxes")
-      .select("id, code, name")
+      .select("id, code, name, items ( quantity )")
       .eq("location_id", locationId)
       .eq("owner_id", userId)
       .order("code");
@@ -418,7 +419,6 @@ function LocationInner() {
       return;
     }
 
-    // Fetch items to remove photos
     const itemsRes = await supabase
       .from("items")
       .select("id, photo_url")
@@ -433,7 +433,6 @@ function LocationInner() {
 
     const items = (itemsRes.data ?? []) as { id: string; photo_url: string | null }[];
 
-    // Best-effort: delete storage photos
     const paths: string[] = [];
     for (const it of items) {
       if (!it.photo_url) continue;
@@ -444,7 +443,6 @@ function LocationInner() {
       await supabase.storage.from("item-photos").remove(paths);
     }
 
-    // Delete items then box
     const delItemsRes = await supabase
       .from("items")
       .delete()
@@ -551,6 +549,8 @@ function LocationInner() {
       <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
         {boxes.map((b) => {
           const isSelected = selectedIds.has(b.id);
+          const totalQty =
+            b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
 
           return (
             <a
@@ -574,14 +574,37 @@ function LocationInner() {
                 flexWrap: "wrap",
               }}
             >
-              <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ display: "grid", gap: 6 }}>
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
-                {b.name && <div style={{ opacity: 0.85 }}>{b.name}</div>}
-                {!b.name && <div style={{ opacity: 0.6 }}>No name</div>}
+
+                {b.name ? (
+                  <div style={{ fontWeight: 700 }}>{b.name}</div>
+                ) : (
+                  <div style={{ opacity: 0.6 }}>No name</div>
+                )}
+
+                {/* ✅ Item count pill (same style as boxes page) */}
+                <div
+                  style={{
+                    marginTop: 2,
+                    display: "inline-block",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    fontWeight: 900,
+                    fontSize: 13,
+                    background: "#ecfdf5",
+                    border: "1px solid #bbf7d0",
+                    color: "#166534",
+                    width: "fit-content",
+                  }}
+                >
+                  {totalQty} item{totalQty === 1 ? "" : "s"}
+                </div>
+
                 {moveMode && isSelected && (
                   <div
                     style={{
-                      marginTop: 8,
+                      marginTop: 4,
                       display: "inline-block",
                       padding: "4px 10px",
                       borderRadius: 999,
@@ -729,16 +752,7 @@ function LocationInner() {
         title={moveMode ? "Exit move mode" : "Move boxes"}
         disabled={busy}
       >
-        <svg
-          width="28"
-          height="28"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={moveMode ? "white" : "#111"}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={moveMode ? "white" : "#111"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
           <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
           <path d="M7 5.5c2.5-2 6.5-2 9 0" />
