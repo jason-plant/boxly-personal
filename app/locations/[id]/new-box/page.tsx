@@ -41,7 +41,6 @@ export default function NewBoxInLocationPage() {
     async function load() {
       setErr(null);
 
-      // ✅ current user
       const { data: authData, error: authErr } = await supabase.auth.getUser();
       const userId = authData.user?.id;
 
@@ -50,7 +49,6 @@ export default function NewBoxInLocationPage() {
         return;
       }
 
-      // ✅ location must belong to this user
       const locRes = await supabase
         .from("locations")
         .select("id, name")
@@ -65,7 +63,6 @@ export default function NewBoxInLocationPage() {
 
       setLocation(locRes.data as LocationRow);
 
-      // ✅ only THIS user's boxes used for auto code
       const boxesRes = await supabase
         .from("boxes")
         .select("id, code")
@@ -99,7 +96,6 @@ export default function NewBoxInLocationPage() {
     setBusy(true);
     setErr(null);
 
-    // ✅ current user
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     const userId = authData.user?.id;
 
@@ -109,12 +105,11 @@ export default function NewBoxInLocationPage() {
       return;
     }
 
-    // Insert box + return the code so we can open it
     const insertRes = await supabase
       .from("boxes")
       .insert({
-        owner_id: userId, // ✅ per-user isolation
-        code: nextAutoCode,
+        owner_id: userId,
+        code: nextAutoCode, // hidden from user
         name: trimmed,
         location_id: location.id,
       })
@@ -127,7 +122,6 @@ export default function NewBoxInLocationPage() {
       return;
     }
 
-    // ✅ Immediately open the new box
     router.push(`/box/${encodeURIComponent(insertRes.data.code)}`);
     router.refresh();
   }
@@ -161,16 +155,12 @@ export default function NewBoxInLocationPage() {
           gap: 10,
         }}
       >
-        <div style={{ fontWeight: 900 }}>
-          Box Code (auto):{" "}
-          <span style={{ opacity: 0.85 }}>{nextAutoCode}</span>
-        </div>
-
         <input
           placeholder="Box name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
+          disabled={busy}
         />
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
