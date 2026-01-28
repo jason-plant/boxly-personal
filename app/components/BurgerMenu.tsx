@@ -1,9 +1,79 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import NavBarLinks from "../NavBarLinks";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "../lib/auth";
+
+/* ===== Icon components (simple, lightweight SVGs) ===== */
+
+function IconLocations() {
+  return <span>📍</span>;
+}
+function IconBoxes() {
+  return <span>📦</span>;
+}
+function IconSearch() {
+  return <span>🔍</span>;
+}
+function IconLabels() {
+  return <span>🏷️</span>;
+}
+function IconScanQR() {
+  return <span>📷</span>;
+}
+function IconScanItem() {
+  return <span>➕</span>;
+}
+function IconLogout() {
+  return <span>🚪</span>;
+}
+
+/* ===== Menu row ===== */
+
+function MenuRow({
+  icon,
+  label,
+  onClick,
+  active,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "14px 16px",
+        borderRadius: 16,
+        border: "1px solid #e5e7eb",
+        background: active ? "#111" : "#fff",
+        color: active ? "#fff" : "#111",
+        fontWeight: 900,
+        fontSize: 16,
+        textAlign: "left",
+        boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+      }}
+    >
+      <span style={{ fontSize: 20, width: 24, textAlign: "center" }}>{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+/* ===== Burger Menu ===== */
 
 export default function BurgerMenu() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, signOut } = useAuth();
+
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -18,10 +88,8 @@ export default function BurgerMenu() {
   useEffect(() => {
     if (!open) return;
 
-    // Focus the panel for accessibility / keyboard
     setTimeout(() => panelRef.current?.focus(), 10);
 
-    // Stop background scroll when menu is open
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -29,9 +97,27 @@ export default function BurgerMenu() {
     };
   }, [open]);
 
+  const items = useMemo(() => {
+    if (!user) return [];
+
+    return [
+      { label: "Locations", href: "/locations", icon: <IconLocations /> },
+      { label: "Boxes", href: "/boxes", icon: <IconBoxes /> },
+      { label: "Search", href: "/search", icon: <IconSearch /> },
+      { label: "Labels", href: "/labels", icon: <IconLabels /> },
+      { label: "Scan QR", href: "/scan", icon: <IconScanQR /> },
+      { label: "Scan Item", href: "/scan-item", icon: <IconScanItem /> },
+    ];
+  }, [user]);
+
+  function go(href: string) {
+    setOpen(false);
+    router.push(href);
+  }
+
   return (
     <>
-      {/* Burger button (top right) */}
+      {/* Burger button */}
       <button
         type="button"
         aria-label="Open menu"
@@ -46,10 +132,8 @@ export default function BurgerMenu() {
           alignItems: "center",
           justifyContent: "center",
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-          cursor: "pointer",
         }}
       >
-        {/* burger icon */}
         <svg
           width="22"
           height="22"
@@ -65,13 +149,12 @@ export default function BurgerMenu() {
         </svg>
       </button>
 
-      {/* Overlay + Drawer */}
+      {/* Overlay */}
       {open && (
         <div
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => {
-            // close when clicking the dark backdrop
             if (e.target === e.currentTarget) setOpen(false);
           }}
           style={{
@@ -81,72 +164,75 @@ export default function BurgerMenu() {
             background: "rgba(0,0,0,0.55)",
           }}
         >
+          {/* Drawer */}
           <div
             ref={panelRef}
             tabIndex={-1}
-            onMouseDown={(e) => {
-              // prevent closing when clicking inside panel
-              e.stopPropagation();
-            }}
-            onClickCapture={(e) => {
-              // If user clicks any link inside the menu, close it
-              const target = e.target as HTMLElement | null;
-              if (!target) return;
-
-              // close when clicking anchors (links)
-              if (target.closest("a")) setOpen(false);
-
-              // close when clicking logout button etc.
-              if (target.closest("button") && target.getAttribute("aria-label") !== "Close menu") {
-                // allow close on logout too
-                setOpen(false);
-              }
-            }}
             style={{
               position: "absolute",
               top: 0,
               right: 0,
               height: "100%",
-              width: "min(86vw, 360px)",
+              width: "min(86vw, 340px)",
               background: "#fff",
               borderLeft: "1px solid #e5e7eb",
               boxShadow: "-20px 0 60px rgba(0,0,0,0.25)",
-              padding: 14,
+              padding: 16,
               display: "flex",
               flexDirection: "column",
-              gap: 12,
+              gap: 14,
             }}
           >
+            {/* Header */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 10,
               }}
             >
-              <div style={{ fontWeight: 900, fontSize: 16 }}>Menu</div>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>Menu</div>
 
               <button
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setOpen(false)}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
                   border: "1px solid #e5e7eb",
                   background: "#fff",
                   fontWeight: 900,
-                  cursor: "pointer",
                 }}
               >
                 ✕
               </button>
             </div>
 
+            {/* Menu items */}
             <div style={{ display: "grid", gap: 10 }}>
-              <NavBarLinks />
+              {items.map((it) => (
+                <MenuRow
+                  key={it.href}
+                  icon={it.icon}
+                  label={it.label}
+                  active={pathname === it.href || pathname.startsWith(it.href + "/")}
+                  onClick={() => go(it.href)}
+                />
+              ))}
+
+              {user && (
+                <MenuRow
+                  icon={<IconLogout />}
+                  label="Log out"
+                  onClick={async () => {
+                    setOpen(false);
+                    await signOut();
+                    router.push("/login");
+                  }}
+                />
+              )}
             </div>
 
             <div style={{ marginTop: "auto", opacity: 0.6, fontSize: 12 }}>
