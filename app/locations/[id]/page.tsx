@@ -49,11 +49,7 @@ function LocationInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ===== Edit Location (FAB + modal) =====
-  const [editOpen, setEditOpen] = useState(false);
-  const [editName, setEditName] = useState("");
-
-  // ===== Move mode =====
+  // Move mode
   const [moveMode, setMoveMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedRef = useRef<Set<string>>(new Set());
@@ -87,7 +83,6 @@ function LocationInner() {
       return;
     }
 
-    // Location (must belong to user)
     const locRes = await supabase
       .from("locations")
       .select("id, name")
@@ -103,7 +98,6 @@ function LocationInner() {
 
     setLocation(locRes.data as LocationRow);
 
-    // All locations (for destination dropdown)
     const allLocRes = await supabase
       .from("locations")
       .select("id, name")
@@ -117,7 +111,6 @@ function LocationInner() {
       setAllLocations((allLocRes.data ?? []) as LocationMini[]);
     }
 
-    // Boxes in this location (must belong to user)
     const boxRes = await supabase
       .from("boxes")
       .select("id, code, name")
@@ -132,22 +125,17 @@ function LocationInner() {
       setBoxes((boxRes.data ?? []) as BoxRow[]);
     }
 
-    // Reset move state
     setMoveMode(false);
     const empty = new Set<string>();
     setSelectedIds(empty);
     selectedRef.current = empty;
     setDestLocationId("");
 
-    // reset modals
     setConfirmMoveOpen(false);
     confirmMoveInfoRef.current = null;
+
     setNewLocOpen(false);
     setNewLocName("");
-
-    // edit modal
-    setEditOpen(false);
-    setEditName("");
 
     setLoading(false);
   }
@@ -156,67 +144,6 @@ function LocationInner() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId]);
-
-  // ===== Edit Location handlers =====
-
-  function openEdit() {
-    if (!location) return;
-    setError(null);
-    setEditName(location.name);
-    setEditOpen(true);
-  }
-
-  async function saveLocation() {
-    if (!location) return;
-    const trimmed = editName.trim();
-
-    if (!trimmed) {
-      setError("Location name is required.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    const res = await supabase
-      .from("locations")
-      .update({ name: trimmed })
-      .eq("owner_id", userId)
-      .eq("id", location.id)
-      .select("id,name")
-      .single();
-
-    if (res.error || !res.data) {
-      setError(res.error?.message || "Failed to update location.");
-      setBusy(false);
-      return;
-    }
-
-    // update local state
-    setLocation({ id: res.data.id, name: res.data.name });
-
-    setAllLocations((prev) => {
-      const next = prev.map((l) =>
-        l.id === res.data.id ? { id: l.id, name: res.data.name } : l
-      );
-      next.sort((a, b) => a.name.localeCompare(b.name));
-      return next;
-    });
-
-    setEditOpen(false);
-    setBusy(false);
-  }
-
-  // ===== Move mode helpers =====
 
   function enterMoveMode() {
     setError(null);
@@ -374,8 +301,6 @@ function LocationInner() {
     setBusy(false);
   }
 
-  // ===== Render states =====
-
   if (loading) {
     return (
       <main style={{ padding: 16 }}>
@@ -419,19 +344,10 @@ function LocationInner() {
             marginTop: 10,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ margin: 0 }}>Move boxes</h2>
-              <div style={{ opacity: 0.85 }}>
-                Tap box cards to select. Use the sticky bar to move.
-              </div>
+              <div style={{ opacity: 0.85 }}>Tap box cards to select. Use the sticky bar to move.</div>
             </div>
 
             <button type="button" onClick={exitMoveMode} disabled={busy}>
@@ -473,11 +389,7 @@ function LocationInner() {
                 display: "block",
                 textDecoration: "none",
                 color: "#111",
-                border: moveMode
-                  ? isSelected
-                    ? "2px solid #16a34a"
-                    : "2px solid #e5e7eb"
-                  : "1px solid #e5e7eb",
+                border: moveMode ? (isSelected ? "2px solid #16a34a" : "2px solid #e5e7eb") : "1px solid #e5e7eb",
                 cursor: moveMode ? "pointer" : "default",
               }}
             >
@@ -508,7 +420,21 @@ function LocationInner() {
       <a
         href={`/locations/${encodeURIComponent(location.id)}/new-box`}
         aria-label="Add box"
-        style={fabStyle(18, "#111", "#fff")}
+        style={{
+          position: "fixed",
+          right: 18,
+          bottom: 18,
+          width: 58,
+          height: 58,
+          borderRadius: 999,
+          background: "#111",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textDecoration: "none",
+          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
+          zIndex: 2000,
+        }}
       >
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="5" x2="12" y2="19" />
@@ -522,8 +448,19 @@ function LocationInner() {
         onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
         aria-label="Move boxes"
         style={{
-          ...fabStyle(86, moveMode ? "#16a34a" : "#ffffff", moveMode ? "#fff" : "#111"),
+          position: "fixed",
+          right: 18,
+          bottom: 86,
+          width: 58,
+          height: 58,
+          borderRadius: 999,
+          background: moveMode ? "#16a34a" : "#ffffff",
           border: "1px solid #e5e7eb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
+          zIndex: 2000,
           cursor: "pointer",
         }}
         title={moveMode ? "Exit move mode" : "Move boxes"}
@@ -541,26 +478,7 @@ function LocationInner() {
         </svg>
       </button>
 
-      {/* ✅ FAB: Edit location */}
-      <button
-        type="button"
-        onClick={openEdit}
-        aria-label="Edit location"
-        style={{
-          ...fabStyle(154, "#ffffff", "#111"),
-          border: "1px solid #e5e7eb",
-          cursor: "pointer",
-        }}
-        title="Edit location"
-        disabled={busy}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 20h9" />
-          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-        </svg>
-      </button>
-
-      {/* Sticky Move Bar */}
+      {/* Sticky Move Bar (no New button now) */}
       {moveMode && (
         <div
           style={{
@@ -619,50 +537,7 @@ function LocationInner() {
         </div>
       )}
 
-      {/* Edit Location Modal */}
-      <Modal
-        open={editOpen}
-        title="Edit location"
-        onClose={() => {
-          if (busy) return;
-          setEditOpen(false);
-        }}
-      >
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Change the location name.
-        </p>
-
-        <input
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          placeholder="Location name"
-          autoFocus
-        />
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (busy) return;
-              setEditOpen(false);
-            }}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={saveLocation}
-            disabled={busy || !editName.trim()}
-            style={{ background: "#111", color: "#fff" }}
-          >
-            {busy ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </Modal>
-
-      {/* Create Location Modal (from move) */}
+      {/* Create Location Modal */}
       <Modal
         open={newLocOpen}
         title="Create new location"
@@ -756,25 +631,6 @@ function LocationInner() {
       </Modal>
     </main>
   );
-}
-
-function fabStyle(bottomPx: number, bg: string, fg: string): React.CSSProperties {
-  return {
-    position: "fixed",
-    right: 18,
-    bottom: bottomPx,
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    background: bg,
-    color: fg,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
-    zIndex: 2000,
-  };
 }
 
 /* ================= MODAL COMPONENT ================= */
