@@ -3,6 +3,8 @@
 import RequireAuth from "../components/RequireAuth";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { supabase } from "../lib/supabaseClient";
+import EditIconButton from "../components/EditIconButton";
+import DeleteIconButton from "../components/DeleteIconButton";
 
 type LocationRow = {
   id: string;
@@ -120,9 +122,7 @@ function LocationsInner() {
 
     // update local list immediately (keep box counts as-is)
     setLocations((prev) => {
-      const next = prev.map((x) =>
-        x.id === l.id ? { ...x, name: res.data.name } : x
-      );
+      const next = prev.map((x) => (x.id === l.id ? { ...x, name: res.data.name } : x));
       next.sort((a, b) => a.name.localeCompare(b.name));
       return next;
     });
@@ -240,47 +240,25 @@ function LocationsInner() {
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
-                {/* ✅ Edit location name (does NOT open the location) */}
-                <button
-                  type="button"
+                {/* ✅ Edit icon (does NOT open the location) */}
+                <span
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    openEdit(l);
-                  }}
-                  disabled={busy}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    color: "#111",
-                    background: "#fff",
-                    fontWeight: 900,
-                    borderRadius: 16,
-                    padding: "10px 14px",
                   }}
                 >
-                  Edit
-                </button>
+                  <EditIconButton title="Edit location" disabled={busy} onClick={() => openEdit(l)} />
+                </span>
 
-                {/* Delete */}
-                <button
-                  type="button"
+                {/* ✅ Delete icon (does NOT open the location) */}
+                <span
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    requestDelete(l);
-                  }}
-                  disabled={busy}
-                  style={{
-                    border: "1px solid rgba(239,68,68,0.5)",
-                    color: "#b91c1c",
-                    background: "#fff",
-                    fontWeight: 900,
-                    borderRadius: 16,
-                    padding: "10px 14px",
                   }}
                 >
-                  Delete
-                </button>
+                  <DeleteIconButton title="Delete location" disabled={busy} onClick={() => requestDelete(l)} />
+                </span>
               </div>
             </a>
           );
@@ -312,7 +290,16 @@ function LocationsInner() {
           textAlign: "center",
         }}
       >
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
@@ -329,16 +316,9 @@ function LocationsInner() {
           setEditName("");
         }}
       >
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Fix spelling or rename this location.
-        </p>
+        <p style={{ marginTop: 0, opacity: 0.85 }}>Fix spelling or rename this location.</p>
 
-        <input
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          placeholder="Location name"
-          autoFocus
-        />
+        <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Location name" autoFocus />
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
@@ -354,12 +334,7 @@ function LocationsInner() {
             Cancel
           </button>
 
-          <button
-            type="button"
-            onClick={saveEdit}
-            disabled={busy || !editName.trim()}
-            style={{ background: "#111", color: "#fff" }}
-          >
+          <button type="button" onClick={saveEdit} disabled={busy || !editName.trim()} style={{ background: "#111", color: "#fff" }}>
             {busy ? "Saving..." : "Save"}
           </button>
         </div>
@@ -378,9 +353,7 @@ function LocationsInner() {
           <strong>{blockedInfoRef.current?.name ?? "This location"}</strong> can’t be deleted because it still contains{" "}
           <strong>{blockedInfoRef.current?.boxCount ?? 0}</strong> box(es).
         </p>
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Move or delete the boxes first, then try again.
-        </p>
+        <p style={{ marginTop: 0, opacity: 0.85 }}>Move or delete the boxes first, then try again.</p>
 
         <button
           type="button"
@@ -408,7 +381,7 @@ function LocationsInner() {
           Delete <strong>{locToDeleteRef.current?.name ?? "this location"}</strong>?
         </p>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <button
             type="button"
             onClick={() => {
@@ -421,14 +394,9 @@ function LocationsInner() {
             Cancel
           </button>
 
-          <button
-            type="button"
-            onClick={confirmDelete}
-            disabled={busy}
-            style={{ background: "#ef4444", color: "#fff" }}
-          >
-            {busy ? "Deleting..." : "Delete"}
-          </button>
+          {/* ✅ confirm delete as icon */}
+          <DeleteIconButton title="Confirm delete" disabled={busy} variant="solid" onClick={confirmDelete} />
+          {busy && <span style={{ opacity: 0.75 }}>Deleting…</span>}
         </div>
       </Modal>
     </main>
