@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../lib/supabaseClient";
 import RequireAuth from "../../components/RequireAuth";
-import DeleteIconButton from "../../components/DeleteIconButton";
 
 type BoxRow = {
   id: string;
@@ -14,32 +13,43 @@ type BoxRow = {
   location: string | null;
 };
 
+type BoxMini = {
+  id: string;
+  code: string;
+};
+
+type LocationRow = {
+  id: string;
+  name: string;
+};
+
 type ItemRow = {
   id: string;
   name: string;
   description: string | null;
-  quantity: number | null;
   photo_url: string | null;
-  created_at?: string;
+  quantity: number | null;
 };
 
-type BoxLookup = {
-  id: string;
-  code: string;
-  name: string | null;
-};
-
-export default function BoxPage() {
-  return (
-    <RequireAuth>
-      <BoxPageInner />
-    </RequireAuth>
-  );
+function pad3(n: number) {
+  return String(n).padStart(3, "0");
+}
+function parseBoxNumber(code: string): number | null {
+  const m = /^BOX-(\d{3})$/i.exec(code.trim());
+  if (!m) return null;
+  const num = Number(m[1]);
+  return Number.isFinite(num) ? num : null;
+}
+function getStoragePathFromPublicUrl(url: string) {
+  const marker = "/item-photos/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.substring(idx + marker.length);
 }
 
-function BoxPageInner() {
-  const params = useParams<{ code: string }>();
-  const code = decodeURIComponent(params.code);
+export default function BoxPage() {
+  const params = useParams<{ code?: string }>();
+  const code = params?.code ? decodeURIComponent(String(params.code)) : "";
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -47,348 +57,168 @@ function BoxPageInner() {
 
   const [box, setBox] = useState<BoxRow | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
+  const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
 
-  // QR
-  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  // Locations for "create box" modal
+  const [locations, setLocations] = useState<LocationRow[]>([]);
 
-  // Create item modal
-  const [addOpen, setAddOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newQty, setNewQty] = useState<number>(1);
-  const [newDesc, setNewDesc] = useState("");
-  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
-  const newPhotoInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Edit item modal
-  const [editOpen, setEditOpen] = useState(false);
-  const editItemRef = useRef<ItemRow | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editQty, setEditQty] = useState<number>(1);
-  const [editDesc, setEditDesc] = useState("");
-  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
-  const editPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  // Photo viewer
+  const [viewItem, setViewItem] = useState<ItemRow | null>(null);
 
   // Move mode
   const [moveMode, setMoveMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedRef = useRef<Set<string>>(new Set());
+  const [bulkDestBoxId, setBulkDestBoxId] = useState("");
 
-  // box lookup for destination
-  const [boxLookup, setBoxLookup] = useState<BoxLookup[]>([]);
-  const [destBoxId, setDestBoxId] = useState<string>("");
+  // Modals
+  const [newBoxOpen, setNewBoxOpen] = useState(false);
+  const [newBoxName, setNewBoxName] = useState("");
 
-  // confirm move modal
+  // "Create new location" inside create box modal
+  const [newLocOpen, setNewLocOpen] = useState(false);
+  const [newLocName, setNewLocName] = useState("");
+  const [newBoxLocationId, setNewBoxLocationId] = useState<string>("");
+
   const [confirmMoveOpen, setConfirmMoveOpen] = useState(false);
   const confirmMoveInfoRef = useRef<{
     count: number;
-    fromId: string;
     fromCode: string;
     toId: string;
     toCode: string;
     itemIds: string[];
   } | null>(null);
 
-  // confirm delete (when qty hits 0)
+  // Delete item modal
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteItemRef = useRef<ItemRow | null>(null);
+  const deleteReasonRef = useRef<"qty0" | "button">("button");
 
-  /* ============= Load box + items ============= */
+  // ✅ Edit item modal (name/desc/qty/photo replace)
+  const [editItemOpen, setEditItemOpen] = useState(false);
+  const editItemRef = useRef<ItemRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editQty, setEditQty] = useState<number>(0);
+  const [editRemovePhoto, setEditRemovePhoto] = useState(false);
 
-  async function loadBoxAndItems() {
-    setLoading(true);
-    setError(null);
-
-    // box by code
-    const boxRes = await supabase
-      .from("boxes")
-      .select("id, code, name, location:locations(name)")
-      .eq("code", code)
-      .single();
-
-    if (boxRes.error || !boxRes.data) {
-      setError(boxRes.error?.message || "Box not found.");
-      setBox(null);
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-
-    const b = boxRes.data as any;
-    const mappedBox: BoxRow = {
-      id: b.id,
-      code: b.code,
-      name: b.name ?? null,
-      location: b.location?.name ?? null,
-    };
-
-    setBox(mappedBox);
-
-    // items in box
-    await reloadItems(mappedBox.id);
-
-    // QR for code
-    try {
-      const dataUrl = await QRCode.toDataURL(mappedBox.code, { margin: 1, width: 220 });
-      setQrDataUrl(dataUrl);
-    } catch {
-      setQrDataUrl("");
-    }
-
-    setLoading(false);
-  }
-
-  async function reloadItems(boxId: string) {
-    const itemsRes = await supabase
-      .from("items")
-      .select("id, name, description, quantity, photo_url, created_at")
-      .eq("box_id", boxId)
-      .order("created_at", { ascending: false });
-
-    if (itemsRes.error) {
-      setError(itemsRes.error.message);
-      setItems([]);
-      return;
-    }
-    setItems((itemsRes.data ?? []) as ItemRow[]);
-  }
+  // Photo inputs: choose OR take
+  const chooseFileInputRef = useRef<HTMLInputElement | null>(null);
+  const takePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [editNewPhoto, setEditNewPhoto] = useState<File | null>(null);
 
   useEffect(() => {
-    loadBoxAndItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+    if (!code) return;
 
-  /* ============= Helpers ============= */
+    async function load() {
+      setLoading(true);
+      setError(null);
 
-  function safeFileName(name: string) {
-    return name.replace(/[^\w.\-]+/g, "_");
-  }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
 
-  function getStoragePathFromPublicUrl(url: string) {
-    const marker = "/item-photos/";
-    const idx = url.indexOf(marker);
-    if (idx === -1) return null;
-    return url.substring(idx + marker.length);
-  }
-
-  async function uploadItemPhoto(userId: string, itemId: string, file: File) {
-    const safe = safeFileName(file.name || "photo.jpg");
-    const path = `${userId}/${itemId}/${Date.now()}-${safe}`;
-
-    const uploadRes = await supabase.storage.from("item-photos").upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type || "image/jpeg",
-    });
-
-    if (uploadRes.error) throw new Error(uploadRes.error.message);
-
-    const pub = supabase.storage.from("item-photos").getPublicUrl(path);
-    return pub.data.publicUrl;
-  }
-
-  /* ============= Add item ============= */
-
-  function openAdd() {
-    setError(null);
-    setNewName("");
-    setNewQty(1);
-    setNewDesc("");
-    setNewPhotoFile(null);
-    if (newPhotoInputRef.current) newPhotoInputRef.current.value = "";
-    setAddOpen(true);
-  }
-
-  async function saveNewItem() {
-    if (!box) return;
-    const name = newName.trim();
-    if (!name) {
-      setError("Item name is required.");
-      return;
-    }
-    if (!newPhotoFile) {
-      setError("Please add a photo.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    // 1) create item first
-    const insertRes = await supabase
-      .from("items")
-      .insert({
-        owner_id: userId,
-        box_id: box.id,
-        name,
-        description: newDesc.trim() ? newDesc.trim() : null,
-        quantity: Math.max(1, Math.floor(Number(newQty) || 1)),
-        photo_url: null,
-      })
-      .select("id")
-      .single();
-
-    if (insertRes.error || !insertRes.data) {
-      setError(insertRes.error?.message || "Failed to create item.");
-      setBusy(false);
-      return;
-    }
-
-    const itemId = insertRes.data.id as string;
-
-    // 2) upload photo
-    let photoUrl = "";
-    try {
-      photoUrl = await uploadItemPhoto(userId, itemId, newPhotoFile);
-    } catch (e: any) {
-      // rollback
-      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
-      setError(e?.message || "Photo upload failed.");
-      setBusy(false);
-      return;
-    }
-
-    // 3) update photo_url
-    const upRes = await supabase.from("items").update({ photo_url: photoUrl }).eq("owner_id", userId).eq("id", itemId);
-    if (upRes.error) {
-      setError(upRes.error.message);
-      setBusy(false);
-      return;
-    }
-
-    setAddOpen(false);
-    setBusy(false);
-    await reloadItems(box.id);
-  }
-
-  /* ============= Edit item ============= */
-
-  function openEdit(item: ItemRow) {
-    setError(null);
-    editItemRef.current = item;
-    setEditName(item.name);
-    setEditQty(item.quantity ?? 1);
-    setEditDesc(item.description ?? "");
-    setEditPhotoFile(null);
-    if (editPhotoInputRef.current) editPhotoInputRef.current.value = "";
-    setEditOpen(true);
-  }
-
-  async function saveEditItem() {
-    const item = editItemRef.current;
-    if (!item || !box) return;
-
-    const name = editName.trim();
-    if (!name) {
-      setError("Item name is required.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    // optional: replace photo
-    let newPhotoUrl: string | null = null;
-
-    if (editPhotoFile) {
-      // remove old
-      if (item.photo_url) {
-        const oldPath = getStoragePathFromPublicUrl(item.photo_url);
-        if (oldPath) await supabase.storage.from("item-photos").remove([oldPath]);
-      }
-      try {
-        newPhotoUrl = await uploadItemPhoto(userId, item.id, editPhotoFile);
-      } catch (e: any) {
-        setError(e?.message || "Photo upload failed.");
-        setBusy(false);
+      if (!userId) {
+        setError("Not logged in.");
+        setLoading(false);
         return;
       }
+
+      const boxRes = await supabase
+        .from("boxes")
+        .select("id, code, name, location")
+        .eq("owner_id", userId)
+        .eq("code", code)
+        .maybeSingle();
+
+      if (!boxRes.data || boxRes.error) {
+        setError("Box not found");
+        setLoading(false);
+        return;
+      }
+
+      setBox(boxRes.data);
+
+      const itemsRes = await supabase
+        .from("items")
+        .select("id, name, description, photo_url, quantity")
+        .eq("owner_id", userId)
+        .eq("box_id", boxRes.data.id)
+        .order("name");
+
+      setItems(itemsRes.data ?? []);
+
+      const boxesRes = await supabase
+        .from("boxes")
+        .select("id, code")
+        .eq("owner_id", userId)
+        .order("code");
+
+      setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
+
+      const locRes = await supabase
+        .from("locations")
+        .select("id, name")
+        .eq("owner_id", userId)
+        .order("name");
+
+      setLocations((locRes.data ?? []) as LocationRow[]);
+
+      // reset move state
+      setMoveMode(false);
+      const empty = new Set<string>();
+      setSelectedIds(empty);
+      selectedRef.current = empty;
+      setBulkDestBoxId("");
+
+      // close modals
+      setNewBoxOpen(false);
+      setConfirmMoveOpen(false);
+      setConfirmDeleteOpen(false);
+      setNewBoxName("");
+      setNewBoxLocationId("");
+      setNewLocOpen(false);
+      setNewLocName("");
+      confirmMoveInfoRef.current = null;
+      deleteItemRef.current = null;
+      deleteReasonRef.current = "button";
+
+      // edit modal reset
+      setEditItemOpen(false);
+      editItemRef.current = null;
+      setEditName("");
+      setEditDesc("");
+      setEditQty(0);
+      setEditRemovePhoto(false);
+      setEditNewPhoto(null);
+
+      setLoading(false);
     }
 
-    const updateRes = await supabase
+    load();
+  }, [code]);
+
+  async function reloadItems(boxId: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return;
+
+    const { data } = await supabase
       .from("items")
-      .update({
-        name,
-        description: editDesc.trim() ? editDesc.trim() : null,
-        quantity: Math.max(0, Math.floor(Number(editQty) || 0)),
-        ...(newPhotoUrl ? { photo_url: newPhotoUrl } : {}),
-      })
+      .select("id, name, description, photo_url, quantity")
       .eq("owner_id", userId)
-      .eq("id", item.id);
+      .eq("box_id", boxId)
+      .order("name");
 
-    if (updateRes.error) {
-      setError(updateRes.error.message);
-      setBusy(false);
-      return;
-    }
-
-    setEditOpen(false);
-    editItemRef.current = null;
-    setBusy(false);
-    await reloadItems(box.id);
+    setItems(data ?? []);
   }
 
-  /* ============= Quantity & Delete ============= */
-
-  async function updateQty(item: ItemRow, newQtyVal: number) {
-    if (!box) return;
-
-    const qty = Math.max(0, Math.floor(Number(newQtyVal) || 0));
-
-    // if hits 0, show confirm delete modal instead of saving 0
-    if (qty === 0) {
-      deleteItemRef.current = item;
-      setConfirmDeleteOpen(true);
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    const res = await supabase.from("items").update({ quantity: qty }).eq("owner_id", userId).eq("id", item.id);
-    if (res.error) {
-      setError(res.error.message);
-      setBusy(false);
-      return;
-    }
-
-    setBusy(false);
-    await reloadItems(box.id);
-  }
+  /* ============= Delete ============= */
 
   async function deleteItemAndPhoto(item: ItemRow) {
-    if (!box) return;
-
     setBusy(true);
     setError(null);
 
-    // best-effort delete photo
+    // delete photo (best effort)
     if (item.photo_url) {
       const path = getStoragePathFromPublicUrl(item.photo_url);
       if (path) {
@@ -396,47 +226,212 @@ function BoxPageInner() {
       }
     }
 
-    const res = await supabase.from("items").delete().eq("id", item.id);
-    if (res.error) {
-      setError(res.error.message);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
       setBusy(false);
       return;
     }
 
-    setBusy(false);
-    await reloadItems(box.id);
-  }
+    const delRes = await supabase.from("items").delete().eq("owner_id", userId).eq("id", item.id);
 
-  /* ============= Move mode (items) ============= */
-
-  async function loadBoxLookup() {
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
+    if (delRes.error) {
+      setError(delRes.error.message);
+      setBusy(false);
       return;
     }
 
-    const res = await supabase.from("boxes").select("id, code, name").eq("owner_id", userId).order("code");
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+
+    setSelectedIds((prev) => {
+      const copy = new Set(prev);
+      copy.delete(item.id);
+      selectedRef.current = copy;
+      return copy;
+    });
+
+    setBusy(false);
+  }
+
+  function requestDeleteItem(item: ItemRow, reason: "qty0" | "button") {
+    deleteItemRef.current = item;
+    deleteReasonRef.current = reason;
+    setConfirmDeleteOpen(true);
+  }
+
+  /* ============= Quantity ============= */
+
+  async function saveQuantity(itemId: string, qty: number) {
+    const safeQty = Math.max(0, Math.floor(qty));
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    if (safeQty === 0) {
+      requestDeleteItem(item, "qty0");
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      return;
+    }
+
+    const res = await supabase.from("items").update({ quantity: safeQty }).eq("owner_id", userId).eq("id", itemId);
+
     if (res.error) {
       setError(res.error.message);
-      setBoxLookup([]);
       return;
     }
-    setBoxLookup((res.data ?? []) as BoxLookup[]);
+
+    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantity: safeQty } : i)));
   }
+
+  /* ============= Edit Item (name/desc/qty/photo replace) ============= */
+
+  function openEditItem(i: ItemRow) {
+    setError(null);
+    editItemRef.current = i;
+    setEditName(i.name ?? "");
+    setEditDesc(i.description ?? "");
+    setEditQty(i.quantity ?? 0);
+    setEditRemovePhoto(false);
+    setEditNewPhoto(null);
+    setEditItemOpen(true);
+  }
+
+  function onPickNewPhoto(file: File | null) {
+    setEditNewPhoto(file);
+    if (file) setEditRemovePhoto(false);
+  }
+
+  async function saveItemEdits() {
+    const it = editItemRef.current;
+    if (!it || !box) return;
+
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setError("Item name is required.");
+      return;
+    }
+
+    const safeQty = Math.max(0, Math.floor(Number(editQty) || 0));
+    if (safeQty === 0) {
+      setEditItemOpen(false);
+      editItemRef.current = null;
+      setEditNewPhoto(null);
+      setEditRemovePhoto(false);
+      requestDeleteItem(it, "qty0");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    // Photo handling
+    let newPhotoUrl: string | null = it.photo_url ?? null;
+    const oldPhotoUrl = it.photo_url;
+
+    // Remove existing photo
+    if (editRemovePhoto) {
+      if (oldPhotoUrl) {
+        const oldPath = getStoragePathFromPublicUrl(oldPhotoUrl);
+        if (oldPath) {
+          await supabase.storage.from("item-photos").remove([oldPath]);
+        }
+      }
+      newPhotoUrl = null;
+    }
+
+    // Replace with new photo (either camera or file picker)
+    if (editNewPhoto) {
+      // delete old if present
+      if (oldPhotoUrl) {
+        const oldPath = getStoragePathFromPublicUrl(oldPhotoUrl);
+        if (oldPath) {
+          await supabase.storage.from("item-photos").remove([oldPath]);
+        }
+      }
+
+      const safeName = editNewPhoto.name.replace(/[^\w.\-]+/g, "_");
+      const path = `${userId}/${it.id}/${Date.now()}-${safeName}`;
+
+      const uploadRes = await supabase.storage.from("item-photos").upload(path, editNewPhoto, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: editNewPhoto.type || "image/jpeg",
+      });
+
+      if (uploadRes.error) {
+        setError(uploadRes.error.message);
+        setBusy(false);
+        return;
+      }
+
+      const pub = supabase.storage.from("item-photos").getPublicUrl(path);
+      newPhotoUrl = pub.data.publicUrl;
+    }
+
+    const updatePayload = {
+      name: trimmedName,
+      description: editDesc.trim() ? editDesc.trim() : null,
+      quantity: safeQty,
+      photo_url: newPhotoUrl,
+    };
+
+    const res = await supabase
+      .from("items")
+      .update(updatePayload)
+      .eq("owner_id", userId)
+      .eq("id", it.id)
+      .select("id, name, description, photo_url, quantity")
+      .single();
+
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to update item.");
+      setBusy(false);
+      return;
+    }
+
+    setItems((prev) => prev.map((x) => (x.id === it.id ? (res.data as ItemRow) : x)));
+
+    setEditItemOpen(false);
+    editItemRef.current = null;
+    setEditNewPhoto(null);
+    setEditRemovePhoto(false);
+    setBusy(false);
+  }
+
+  /* ============= Move Mode ============= */
+
+  const nextAutoCode = useMemo(() => {
+    let max = 0;
+    for (const b of allBoxes) {
+      const n = parseBoxNumber(b.code);
+      if (n !== null && n > max) max = n;
+    }
+    return `BOX-${pad3(max + 1)}`;
+  }, [allBoxes]);
 
   function enterMoveMode() {
     setMoveMode(true);
     const empty = new Set<string>();
     setSelectedIds(empty);
     selectedRef.current = empty;
-    setDestBoxId("");
-    setError(null);
-    loadBoxLookup();
+    setBulkDestBoxId("");
   }
 
   function exitMoveMode() {
@@ -444,8 +439,7 @@ function BoxPageInner() {
     const empty = new Set<string>();
     setSelectedIds(empty);
     selectedRef.current = empty;
-    setDestBoxId("");
-    setError(null);
+    setBulkDestBoxId("");
   }
 
   function toggleSelected(itemId: string) {
@@ -469,11 +463,103 @@ function BoxPageInner() {
     selectedRef.current = empty;
   }
 
-  const destBoxLabel = useMemo(() => {
-    const d = boxLookup.find((b) => b.id === destBoxId);
-    if (!d) return "";
-    return d.name ? `${d.code} — ${d.name}` : d.code;
-  }, [destBoxId, boxLookup]);
+  async function createLocationInlineForNewBox() {
+    const trimmed = newLocName.trim();
+    if (!trimmed) return;
+
+    setBusy(true);
+    setError(null);
+
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    const res = await supabase
+      .from("locations")
+      .insert({ owner_id: userId, name: trimmed })
+      .select("id, name")
+      .single();
+
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to create location.");
+      setBusy(false);
+      return;
+    }
+
+    setLocations((prev) => {
+      const next = [...prev, res.data as LocationRow];
+      next.sort((a, b) => a.name.localeCompare(b.name));
+      return next;
+    });
+
+    setNewBoxLocationId(res.data.id);
+    setNewLocOpen(false);
+    setNewLocName("");
+    setBusy(false);
+  }
+
+  async function createNewBoxFromMove(name: string) {
+    if (!name.trim()) {
+      setError("Box name is required.");
+      return null;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (sErr || !userId) {
+      setError(sErr?.message || "Not logged in.");
+      setBusy(false);
+      return null;
+    }
+
+    const insertRes = await supabase
+      .from("boxes")
+      .insert({
+        owner_id: userId,
+        code: nextAutoCode,
+        name: name.trim(),
+        location_id: newBoxLocationId || null,
+      })
+      .select("id, code")
+      .single();
+
+    if (insertRes.error || !insertRes.data) {
+      setError(insertRes.error?.message || "Failed to create new box.");
+      setBusy(false);
+      return null;
+    }
+
+    setAllBoxes((prev) => {
+      const next = [...prev, { id: insertRes.data.id, code: insertRes.data.code }];
+      next.sort((a, b) => a.code.localeCompare(b.code));
+      return next;
+    });
+
+    setBulkDestBoxId(insertRes.data.id);
+
+    setBusy(false);
+    return insertRes.data;
+  }
+
+  async function onDestinationChange(value: string) {
+    if (value === "__new__") {
+      setBulkDestBoxId("");
+      setNewBoxName("");
+      setNewBoxLocationId("");
+      setNewBoxOpen(true);
+      return;
+    }
+    setBulkDestBoxId(value);
+  }
 
   function requestMoveSelected() {
     if (!box) return;
@@ -483,27 +569,19 @@ function BoxPageInner() {
       setError("Select at least one item.");
       return;
     }
-    if (!destBoxId) {
+    if (!bulkDestBoxId) {
       setError("Choose a destination box.");
       return;
     }
-    if (destBoxId === box.id) {
-      setError("Destination must be a different box.");
-      return;
-    }
 
-    const to = boxLookup.find((b) => b.id === destBoxId);
-    if (!to) {
-      setError("Destination box not found.");
-      return;
-    }
+    const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
+    const toCode = dest?.code ?? "destination";
 
     confirmMoveInfoRef.current = {
       count: ids.length,
-      fromId: box.id,
       fromCode: box.code,
-      toId: to.id,
-      toCode: to.code,
+      toId: bulkDestBoxId,
+      toCode,
       itemIds: ids,
     };
 
@@ -511,13 +589,28 @@ function BoxPageInner() {
   }
 
   async function confirmMoveSelected() {
+    if (!box) return;
+
     const info = confirmMoveInfoRef.current;
     if (!info) return;
 
     setBusy(true);
     setError(null);
 
-    const res = await supabase.from("items").update({ box_id: info.toId }).in("id", info.itemIds);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+
+    if (!userId) {
+      setError("Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    const res = await supabase
+      .from("items")
+      .update({ box_id: info.toId })
+      .eq("owner_id", userId)
+      .in("id", info.itemIds);
 
     if (res.error) {
       setError(res.error.message);
@@ -525,86 +618,91 @@ function BoxPageInner() {
       return;
     }
 
-    // refresh this box's items
-    await reloadItems(info.fromId);
+    setItems((prev) => prev.filter((i) => !selectedRef.current.has(i.id)));
 
-    // reset move mode selection
     setConfirmMoveOpen(false);
     confirmMoveInfoRef.current = null;
-    setDestBoxId("");
-    const empty = new Set<string>();
-    setSelectedIds(empty);
-    selectedRef.current = empty;
+    exitMoveMode();
 
     setBusy(false);
   }
 
-  const totalItems = useMemo(() => {
-    return items.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
-  }, [items]);
+  /* ============= QR ============= */
 
-  const totalUnique = items.length;
+  async function printSingleQrLabel(boxCode: string, name?: string | null, location?: string | null) {
+    const url = `${window.location.origin}/box/${encodeURIComponent(boxCode)}`;
+    const qr = await QRCode.toDataURL(url, { width: 420, margin: 1 });
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+
+    w.document.write(`
+      <html>
+        <body style="font-family:Arial;padding:20px">
+          <div style="width:320px;border:2px solid #000;padding:14px;border-radius:12px">
+            <div style="font-size:22px;font-weight:800">${boxCode}</div>
+            ${name ? `<div style="margin-top:6px">${name}</div>` : ""}
+            ${location ? `<div style="margin-top:6px">Location: ${location}</div>` : ""}
+            <img src="${qr}" style="width:100%;margin-top:10px" />
+            <div style="font-size:10px;margin-top:10px;word-break:break-all">${url}</div>
+          </div>
+          <script>window.onload=()=>window.print()</script>
+        </body>
+      </html>
+    `);
+  }
+
+  const destinationBoxes = box ? allBoxes.filter((b) => b.id !== box.id) : [];
 
   return (
     <RequireAuth>
       {loading ? (
-        <main style={{ padding: 20 }}>
+        <main style={{ padding: 16 }}>
           <p>Loading…</p>
         </main>
       ) : !box ? (
-        <main style={{ padding: 20 }}>
-          <h1>Box not found</h1>
-          {error && <p style={{ color: "crimson" }}>{error}</p>}
+        <main style={{ padding: 16 }}>
+          <p>{error ?? "Box not found."}</p>
         </main>
       ) : (
-        <main style={{ paddingBottom: moveMode ? 180 : 110 }}>
-          <h1 style={{ marginTop: 6 }}>
-            {box.code}
-            {box.name ? <span style={{ opacity: 0.65, fontWeight: 700 }}> — {box.name}</span> : null}
-          </h1>
+        <main style={{ paddingBottom: 180 }}>
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 18,
+              padding: 14,
+              boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
+                {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
+                {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
+              </div>
 
-          <div style={{ opacity: 0.85, marginTop: -6 }}>
-            {box.location ? box.location : "No location"} • <strong>{totalUnique}</strong> item types •{" "}
-            <strong>{totalItems}</strong> total items
+              <button onClick={() => printSingleQrLabel(box.code, box.name, box.location)}>Print QR</button>
+            </div>
+
+            {error && <p style={{ color: "crimson", marginTop: 10 }}>Error: {error}</p>}
           </div>
 
-          {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
-
-          {/* QR */}
-          {qrDataUrl && (
-            <div
-              style={{
-                marginTop: 12,
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 18,
-                padding: 14,
-                boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-                maxWidth: 360,
-              }}
-            >
-              <div style={{ fontWeight: 900, marginBottom: 8 }}>Box QR</div>
-              <img src={qrDataUrl} alt="QR code" style={{ width: "100%", borderRadius: 12 }} />
-            </div>
-          )}
-
-          {/* Move mode panel */}
           {moveMode && (
             <div
               style={{
+                marginTop: 12,
                 background: "#fff",
                 border: "2px solid #111",
                 borderRadius: 18,
                 padding: 14,
                 boxShadow: "0 1px 10px rgba(0,0,0,0.10)",
-                marginBottom: 12,
-                marginTop: 12,
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div>
                   <h2 style={{ margin: 0 }}>Move items</h2>
-                  <div style={{ opacity: 0.85 }}>Tap items to select. Use the sticky bar to move.</div>
+                  <div style={{ opacity: 0.85 }}>Tap item cards to select. Use the sticky bar to move.</div>
                 </div>
 
                 <button type="button" onClick={exitMoveMode} disabled={busy}>
@@ -613,10 +711,10 @@ function BoxPageInner() {
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                <button type="button" onClick={selectAll} disabled={busy || items.length === 0}>
+                <button type="button" onClick={selectAll} disabled={items.length === 0 || busy}>
                   Select all
                 </button>
-                <button type="button" onClick={clearSelected} disabled={busy || selectedIds.size === 0}>
+                <button type="button" onClick={clearSelected} disabled={selectedIds.size === 0 || busy}>
                   Clear
                 </button>
                 <div style={{ alignSelf: "center", opacity: 0.85 }}>
@@ -626,17 +724,18 @@ function BoxPageInner() {
             </div>
           )}
 
-          {/* Items */}
-          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-            {items.map((item) => {
-              const isSelected = selectedIds.has(item.id);
+          <h2 style={{ margin: "14px 0 8px" }}>Items</h2>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {items.map((i) => {
+              const hasPhoto = Boolean(i.photo_url);
+              const isSelected = selectedIds.has(i.id);
 
               return (
                 <div
-                  key={item.id}
+                  key={i.id}
                   onClick={() => {
-                    if (!moveMode) return;
-                    toggleSelected(item.id);
+                    if (moveMode) toggleSelected(i.id);
                   }}
                   style={{
                     background: "#fff",
@@ -644,74 +743,146 @@ function BoxPageInner() {
                     borderRadius: 18,
                     padding: 14,
                     boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
-                    display: "grid",
-                    gap: 10,
                     cursor: moveMode ? "pointer" : "default",
                   }}
                 >
-                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      {/* photo */}
-                      <div
-                        style={{
-                          width: 74,
-                          height: 74,
-                          borderRadius: 16,
-                          background: "#f3f4f6",
-                          border: "1px solid #e5e7eb",
-                          overflow: "hidden",
-                          flex: "0 0 auto",
-                        }}
-                      >
-                        {item.photo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.photo_url} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : null}
-                      </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {moveMode && (
+                        <div
+                          aria-hidden
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 999,
+                            border: isSelected ? "2px solid #16a34a" : "2px solid #cbd5e1",
+                            background: isSelected ? "#16a34a" : "transparent",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                      )}
 
-                      <div style={{ display: "grid", gap: 4 }}>
-                        <div style={{ fontWeight: 900 }}>{item.name}</div>
-                        {item.description ? <div style={{ opacity: 0.8 }}>{item.description}</div> : null}
-                        <div style={{ opacity: 0.8, fontWeight: 800 }}>
-                          Qty: <strong>{item.quantity ?? 0}</strong>
-                        </div>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (moveMode) return;
+                          if (hasPhoto) setViewItem(i);
+                        }}
+                        disabled={moveMode || !hasPhoto}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          boxShadow: "none",
+                          textAlign: "left",
+                          fontWeight: 900,
+                          cursor: !moveMode && hasPhoto ? "pointer" : "default",
+                          opacity: 1,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                        title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
+                      >
+                        {i.name}
+                        {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
+                      </button>
                     </div>
 
                     {!moveMode && (
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <button type="button" onClick={() => openEdit(item)} disabled={busy}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditItem(i);
+                          }}
+                          disabled={busy}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            color: "#111",
+                            background: "#fff",
+                            fontWeight: 900,
+                            borderRadius: 16,
+                            padding: "10px 14px",
+                          }}
+                        >
                           Edit
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => updateQty(item, (item.quantity ?? 1) + 1)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestDeleteItem(i, "button");
+                          }}
                           disabled={busy}
-                          style={{ background: "#111", color: "#fff" }}
+                          style={{
+                            border: "1px solid rgba(239,68,68,0.45)",
+                            color: "#b91c1c",
+                            background: "#fff",
+                            fontWeight: 900,
+                            borderRadius: 16,
+                            padding: "10px 14px",
+                          }}
                         >
-                          +1
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => updateQty(item, Math.max(0, (item.quantity ?? 1) - 1))}
-                          disabled={busy}
-                        >
-                          -1
+                          Delete
                         </button>
                       </div>
                     )}
+                  </div>
+
+                  {i.description && <div style={{ marginTop: 8, opacity: 0.9 }}>{i.description}</div>}
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveQuantity(i.id, (i.quantity ?? 0) - 1);
+                      }}
+                      disabled={busy || moveMode}
+                    >
+                      −
+                    </button>
+
+                    <input
+                      type="number"
+                      min={0}
+                      value={i.quantity ?? 0}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setItems((prev) => prev.map((it) => (it.id === i.id ? { ...it, quantity: n } : it)));
+                      }}
+                      onBlur={(e) => {
+                        if (moveMode) return;
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n)) saveQuantity(i.id, n);
+                      }}
+                      style={{ width: 110 }}
+                      disabled={busy || moveMode}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveQuantity(i.id, (i.quantity ?? 0) + 1);
+                      }}
+                      disabled={busy || moveMode}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Add item FAB */}
-          <button
-            type="button"
-            onClick={openAdd}
+          <a
+            href={`/box/${encodeURIComponent(box.code)}/new-item`}
             aria-label="Add item"
             style={{
               position: "fixed",
@@ -721,10 +892,10 @@ function BoxPageInner() {
               height: 58,
               borderRadius: 999,
               background: "#111",
-              color: "#fff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              textDecoration: "none",
               boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
               zIndex: 2000,
             }}
@@ -733,9 +904,8 @@ function BoxPageInner() {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-          </button>
+          </a>
 
-          {/* Move items FAB */}
           <button
             type="button"
             onClick={() => (moveMode ? exitMoveMode() : enterMoveMode())}
@@ -752,7 +922,7 @@ function BoxPageInner() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 14px 30px rgba(0,0,0,0.20)",
+              boxShadow: "0 14px 30px rgba(0,0,0,0.2)",
               zIndex: 2000,
               cursor: "pointer",
             }}
@@ -771,7 +941,6 @@ function BoxPageInner() {
             </svg>
           </button>
 
-          {/* Sticky Move Bar */}
           {moveMode && (
             <div
               style={{
@@ -793,23 +962,47 @@ function BoxPageInner() {
             >
               <div style={{ fontWeight: 900 }}>Selected: {selectedIds.size}</div>
 
-              <div style={{ flex: 1, minWidth: 190 }}>
-                <select value={destBoxId} onChange={(e) => setDestBoxId(e.target.value)} disabled={busy} style={{ width: "100%" }}>
-                  <option value="">Destination box…</option>
-                  {boxLookup
-                    .filter((b) => b.id !== box.id)
-                    .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name ? `${b.code} — ${b.name}` : b.code}
-                      </option>
-                    ))}
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <select
+                  value={bulkDestBoxId}
+                  onChange={(e) => onDestinationChange(e.target.value)}
+                  disabled={busy}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">Destination…</option>
+                  <option value="__new__">{`➕ Create new box (${nextAutoCode})…`}</option>
+                  {destinationBoxes.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.code}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <button
                 type="button"
-                onClick={requestMoveSelected}
-                disabled={busy || selectedIds.size === 0 || !destBoxId}
+                onClick={() => {
+                  if (busy) return;
+                  const ids = Array.from(selectedRef.current);
+                  if (ids.length === 0) {
+                    setError("Select at least one item.");
+                    return;
+                  }
+                  if (!bulkDestBoxId) {
+                    setError("Choose a destination box.");
+                    return;
+                  }
+                  const dest = allBoxes.find((b) => b.id === bulkDestBoxId);
+                  confirmMoveInfoRef.current = {
+                    count: ids.length,
+                    fromCode: box.code,
+                    toId: bulkDestBoxId,
+                    toCode: dest?.code ?? "destination",
+                    itemIds: ids,
+                  };
+                  setConfirmMoveOpen(true);
+                }}
+                disabled={busy || selectedIds.size === 0 || !bulkDestBoxId}
                 style={{
                   background: "#111",
                   color: "#fff",
@@ -818,134 +1011,205 @@ function BoxPageInner() {
                   borderRadius: 14,
                 }}
               >
-                Move
+                {busy ? "Moving…" : "Move"}
               </button>
             </div>
           )}
 
-          {/* Add item modal */}
-          <Modal
-            open={addOpen}
-            title="Add item"
-            onClose={() => {
-              if (busy) return;
-              setAddOpen(false);
-            }}
-          >
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Item name" autoFocus />
-            <input type="number" min={1} value={newQty} onChange={(e) => setNewQty(Number(e.target.value))} placeholder="Quantity" />
-            <textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" style={{ minHeight: 90 }} />
-
-            <input
-              ref={newPhotoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => setNewPhotoFile(e.target.files?.[0] ?? null)}
-            />
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" onClick={() => setAddOpen(false)} disabled={busy}>
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={saveNewItem}
-                disabled={busy || !newName.trim() || !newPhotoFile}
-                style={{ background: "#111", color: "#fff" }}
-              >
-                {busy ? "Saving..." : "Save"}
-              </button>
+          {!moveMode && viewItem && viewItem.photo_url && (
+            <div
+              onClick={() => setViewItem(null)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 3000,
+                padding: 12,
+              }}
+            >
+              <img
+                src={viewItem.photo_url}
+                alt={viewItem.name}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  objectFit: "contain",
+                  borderRadius: 16,
+                }}
+              />
             </div>
-          </Modal>
+          )}
 
-          {/* Edit item modal */}
+          {/* ✅ Edit Item Modal (with Take Photo + Choose File) */}
           <Modal
-            open={editOpen}
+            open={editItemOpen}
             title="Edit item"
             onClose={() => {
               if (busy) return;
-              setEditOpen(false);
+              setEditItemOpen(false);
               editItemRef.current = null;
+              setEditNewPhoto(null);
+              setEditRemovePhoto(false);
+              if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+              if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
             }}
           >
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Item name" autoFocus />
-            <input type="number" min={0} value={editQty} onChange={(e) => setEditQty(Number(e.target.value))} placeholder="Quantity" />
-            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description (optional)" style={{ minHeight: 90 }} />
+            <p style={{ marginTop: 0, opacity: 0.85 }}>
+              Update name/description/quantity and replace (or remove) the photo.
+            </p>
 
-            <input
-              ref={editPhotoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => setEditPhotoFile(e.target.files?.[0] ?? null)}
-            />
+            {error && <p style={{ color: "crimson", margin: 0 }}>Error: {error}</p>}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Name</span>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Item name" autoFocus disabled={busy} />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Description</span>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                placeholder="Optional description"
+                disabled={busy}
+                style={{ minHeight: 90 }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 800 }}>Quantity</span>
+              <input type="number" min={0} value={editQty} onChange={(e) => setEditQty(Number(e.target.value))} disabled={busy} />
+              <div style={{ opacity: 0.7, fontSize: 13 }}>Setting quantity to 0 will ask to delete the item.</div>
+            </label>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ fontWeight: 900 }}>Photo</div>
+
+              {editItemRef.current?.photo_url && !editRemovePhoto && !editNewPhoto && (
+                <img
+                  src={editItemRef.current.photo_url}
+                  alt="Current"
+                  style={{
+                    width: "100%",
+                    maxHeight: 220,
+                    objectFit: "cover",
+                    borderRadius: 14,
+                    border: "1px solid #e5e7eb",
+                  }}
+                />
+              )}
+
+              {/* Hidden inputs */}
+              <input
+                ref={chooseFileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => onPickNewPhoto(e.target.files?.[0] ?? null)}
+                disabled={busy}
+              />
+
+              <input
+                ref={takePhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={(e) => onPickNewPhoto(e.target.files?.[0] ?? null)}
+                disabled={busy}
+              />
+
+              {/* Buttons: choose vs take */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => chooseFileInputRef.current?.click()}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    background: "#fff",
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                    fontWeight: 900,
+                  }}
+                >
+                  Choose file
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => takePhotoInputRef.current?.click()}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    background: "#fff",
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                    fontWeight: 900,
+                  }}
+                >
+                  Take photo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditRemovePhoto((v) => !v);
+                    if (!editRemovePhoto) {
+                      setEditNewPhoto(null);
+                      if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+                      if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
+                    }
+                  }}
+                  disabled={busy || !editItemRef.current?.photo_url}
+                  style={{
+                    border: "1px solid rgba(239,68,68,0.45)",
+                    color: "#b91c1c",
+                    background: "#fff",
+                    fontWeight: 900,
+                    borderRadius: 16,
+                    padding: "10px 14px",
+                  }}
+                >
+                  {editRemovePhoto ? "Undo remove photo" : "Remove photo"}
+                </button>
+              </div>
+
+              {editNewPhoto && (
+                <div style={{ opacity: 0.85, fontSize: 13 }}>
+                  Selected: <strong>{editNewPhoto.name}</strong>
+                </div>
+              )}
+              {editRemovePhoto && <div style={{ opacity: 0.85, fontSize: 13 }}>Photo will be removed when you save.</div>}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
               <button
                 type="button"
                 onClick={() => {
                   if (busy) return;
-                  setEditOpen(false);
+                  setEditItemOpen(false);
                   editItemRef.current = null;
+                  setEditNewPhoto(null);
+                  setEditRemovePhoto(false);
+                  if (chooseFileInputRef.current) chooseFileInputRef.current.value = "";
+                  if (takePhotoInputRef.current) takePhotoInputRef.current.value = "";
                 }}
                 disabled={busy}
               >
                 Cancel
               </button>
 
-              <button
-                type="button"
-                onClick={saveEditItem}
-                disabled={busy || !editName.trim()}
-                style={{ background: "#111", color: "#fff" }}
-              >
+              <button type="button" onClick={saveItemEdits} disabled={busy || !editName.trim()} style={{ background: "#111", color: "#fff" }}>
                 {busy ? "Saving..." : "Save"}
               </button>
             </div>
           </Modal>
 
-          <Modal
-            open={confirmMoveOpen}
-            title="Confirm move"
-            onClose={() => {
-              if (busy) return;
-              setConfirmMoveOpen(false);
-              confirmMoveInfoRef.current = null;
-            }}
-          >
-            {(() => {
-              const info = confirmMoveInfoRef.current;
-              if (!info) return <p>Missing move info.</p>;
-
-              return (
-                <>
-                  <p style={{ marginTop: 0 }}>
-                    Move <strong>{info.count}</strong> item(s) from <strong>{info.fromCode}</strong> to{" "}
-                    <strong>{info.toCode}</strong>?
-                  </p>
-
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (busy) return;
-                        setConfirmMoveOpen(false);
-                        confirmMoveInfoRef.current = null;
-                      }}
-                      disabled={busy}
-                    >
-                      Cancel
-                    </button>
-
-                    <button type="button" onClick={confirmMoveSelected} disabled={busy} style={{ background: "#111", color: "#fff" }}>
-                      {busy ? "Moving..." : "Yes, move"}
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </Modal>
-
+          {/* Delete modal */}
           <Modal
             open={confirmDeleteOpen}
             title="Delete item?"
@@ -956,7 +1220,15 @@ function BoxPageInner() {
             }}
           >
             <p style={{ marginTop: 0 }}>
-              Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+              {deleteReasonRef.current === "qty0" ? (
+                <>
+                  Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+                </>
+              ) : (
+                <>
+                  Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong> (and remove photo)?
+                </>
+              )}
             </p>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -973,11 +1245,8 @@ function BoxPageInner() {
                 Cancel
               </button>
 
-              {/* ✅ confirm delete as icon */}
-              <DeleteIconButton
-                title="Confirm delete"
-                disabled={busy}
-                variant="solid"
+              <button
+                type="button"
                 onClick={async () => {
                   const item = deleteItemRef.current;
                   if (!item) return;
@@ -985,7 +1254,11 @@ function BoxPageInner() {
                   deleteItemRef.current = null;
                   await deleteItemAndPhoto(item);
                 }}
-              />
+                disabled={busy}
+                style={{ background: "#ef4444", color: "#fff" }}
+              >
+                {busy ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </Modal>
         </main>
