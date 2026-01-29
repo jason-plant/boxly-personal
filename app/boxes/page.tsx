@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import RequireAuth from "../components/RequireAuth";
+import DeleteIconButton from "../components/DeleteIconButton";
 
 type LocationRow = {
   id: string;
@@ -15,7 +16,7 @@ type BoxRow = {
   name: string | null;
   location_id: string | null;
   location_name?: string | null;
-  items?: { quantity: number | null }[];
+  items?: { quantity: number | null }[]; // for qty sum
 };
 
 export default function BoxesPage() {
@@ -36,11 +37,6 @@ function BoxesInner() {
   // Delete modal
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const boxToDeleteRef = useRef<BoxRow | null>(null);
-
-  // ✅ Edit box modal (rename only)
-  const [editOpen, setEditOpen] = useState(false);
-  const editBoxRef = useRef<BoxRow | null>(null);
-  const [editName, setEditName] = useState("");
 
   // Move mode
   const [moveMode, setMoveMode] = useState(false);
@@ -65,24 +61,8 @@ function BoxesInner() {
     setLoading(true);
     setError(null);
 
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setLocations([]);
-      setBoxes([]);
-      setLoading(false);
-      return;
-    }
-
-    // Locations (per user)
-    const locRes = await supabase
-      .from("locations")
-      .select("id,name")
-      .eq("owner_id", userId)
-      .order("name");
-
+    // Load locations
+    const locRes = await supabase.from("locations").select("id,name").order("name");
     if (locRes.error) {
       setError(locRes.error.message);
       setLocations([]);
@@ -90,7 +70,7 @@ function BoxesInner() {
       setLocations((locRes.data ?? []) as LocationRow[]);
     }
 
-    // Boxes (per user) + item qty + location join
+    // Load boxes + item qty + location join
     const boxRes = await supabase
       .from("boxes")
       .select(
@@ -103,7 +83,6 @@ function BoxesInner() {
         locations:locations ( name )
       `
       )
-      .eq("owner_id", userId)
       .order("code", { ascending: true });
 
     if (boxRes.error) {
@@ -122,7 +101,7 @@ function BoxesInner() {
       setBoxes(mapped);
     }
 
-    // Reset move state
+    // reset move state
     setMoveMode(false);
     const empty = new Set<string>();
     setSelectedIds(empty);
@@ -131,14 +110,9 @@ function BoxesInner() {
     setConfirmMoveOpen(false);
     confirmMoveInfoRef.current = null;
 
-    // Reset create loc modal
+    // reset create loc modal
     setNewLocOpen(false);
     setNewLocName("");
-
-    // Reset edit modal
-    setEditOpen(false);
-    editBoxRef.current = null;
-    setEditName("");
 
     setLoading(false);
   }
@@ -146,64 +120,6 @@ function BoxesInner() {
   useEffect(() => {
     loadAll();
   }, []);
-
-  // ========= EDIT BOX (rename only) =========
-
-  function openEditBox(b: BoxRow) {
-    setError(null);
-    editBoxRef.current = b;
-    setEditName(b.name ?? "");
-    setEditOpen(true);
-  }
-
-  async function saveEditBox() {
-    const b = editBoxRef.current;
-    if (!b) return;
-
-    const trimmed = editName.trim();
-    if (!trimmed) {
-      setError("Box name is required.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    const res = await supabase
-      .from("boxes")
-      .update({ name: trimmed })
-      .eq("owner_id", userId)
-      .eq("id", b.id)
-      .select("id,name")
-      .single();
-
-    if (res.error || !res.data) {
-      setError(res.error?.message || "Failed to update box.");
-      setBusy(false);
-      return;
-    }
-
-    // Update list immediately
-    setBoxes((prev) =>
-      prev.map((x) => (x.id === b.id ? { ...x, name: res.data.name } : x))
-    );
-
-    setEditOpen(false);
-    editBoxRef.current = null;
-    setEditName("");
-    setBusy(false);
-  }
-
-  // ========= DELETE BOX =========
 
   function requestDeleteBox(b: BoxRow) {
     boxToDeleteRef.current = b;
@@ -224,19 +140,9 @@ function BoxesInner() {
     setBusy(true);
     setError(null);
 
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
     const itemsRes = await supabase
       .from("items")
       .select("id, photo_url")
-      .eq("owner_id", userId)
       .eq("box_id", boxToDelete.id);
 
     if (itemsRes.error) {
@@ -245,41 +151,28 @@ function BoxesInner() {
       return;
     }
 
-    const items = (itemsRes.data ?? []) as {
-      id: string;
-      photo_url: string | null;
-    }[];
+    const items = (itemsRes.data ?? []) as { id: string; photo_url: string | null }[];
 
     // Best-effort photo delete
     const paths: string[] = [];
     for (const it of items) {
       if (!it.photo_url) continue;
-      const p = getStoragePathFromPublicUrl(it.photo_url);
-      if (p) paths.push(p);
+      const path = getStoragePathFromPublicUrl(it.photo_url);
+      if (path) paths.push(path);
     }
     if (paths.length) {
       await supabase.storage.from("item-photos").remove(paths);
     }
 
-    // Delete items then box (per user)
-    const delItemsRes = await supabase
-      .from("items")
-      .delete()
-      .eq("owner_id", userId)
-      .eq("box_id", boxToDelete.id);
-
+    // Delete items then box
+    const delItemsRes = await supabase.from("items").delete().eq("box_id", boxToDelete.id);
     if (delItemsRes.error) {
       setError(delItemsRes.error.message);
       setBusy(false);
       return;
     }
 
-    const delBoxRes = await supabase
-      .from("boxes")
-      .delete()
-      .eq("owner_id", userId)
-      .eq("id", boxToDelete.id);
-
+    const delBoxRes = await supabase.from("boxes").delete().eq("id", boxToDelete.id);
     if (delBoxRes.error) {
       setError(delBoxRes.error.message);
       setBusy(false);
@@ -292,7 +185,7 @@ function BoxesInner() {
     setBusy(false);
   }
 
-  // ========= MOVE MODE =========
+  // ===== Move Mode =====
 
   function enterMoveMode() {
     setMoveMode(true);
@@ -344,6 +237,7 @@ function BoxesInner() {
 
   function onDestinationChange(value: string) {
     if (value === "__new_location__") {
+      // open modal instead of selecting this value
       setDestLocationId("");
       setNewLocName("");
       setNewLocOpen(true);
@@ -362,6 +256,7 @@ function BoxesInner() {
     setBusy(true);
     setError(null);
 
+    // must be logged in (RLS will also enforce)
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     const userId = authData.user?.id;
 
@@ -383,6 +278,7 @@ function BoxesInner() {
       return;
     }
 
+    // add to local list + select it
     setLocations((prev) => {
       const next = [...prev, { id: res.data.id, name: res.data.name }];
       next.sort((a, b) => a.name.localeCompare(b.name));
@@ -392,6 +288,7 @@ function BoxesInner() {
     setDestLocationId(res.data.id);
     setNewLocOpen(false);
     setNewLocName("");
+
     setBusy(false);
   }
 
@@ -423,19 +320,9 @@ function BoxesInner() {
     setBusy(true);
     setError(null);
 
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
-
-    if (authErr || !userId) {
-      setError(authErr?.message || "Not logged in.");
-      setBusy(false);
-      return;
-    }
-
     const res = await supabase
       .from("boxes")
       .update({ location_id: info.toLocationId })
-      .eq("owner_id", userId)
       .in("id", info.boxIds);
 
     if (res.error) {
@@ -444,6 +331,7 @@ function BoxesInner() {
       return;
     }
 
+    // refresh list (so location names update properly)
     await loadAll();
 
     setConfirmMoveOpen(false);
@@ -459,6 +347,7 @@ function BoxesInner() {
       {loading && <p>Loading boxes…</p>}
       {!loading && boxes.length === 0 && <p>No boxes yet.</p>}
 
+      {/* Move Mode helper panel */}
       {moveMode && (
         <div
           style={{
@@ -471,19 +360,10 @@ function BoxesInner() {
             marginTop: 10,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ margin: 0 }}>Move boxes</h2>
-              <div style={{ opacity: 0.85 }}>
-                Tap box cards to select. Use the sticky bar to move.
-              </div>
+              <div style={{ opacity: 0.85 }}>Tap box cards to select. Use the sticky bar to move.</div>
             </div>
 
             <button type="button" onClick={exitMoveMode} disabled={busy}>
@@ -507,8 +387,7 @@ function BoxesInner() {
 
       <div style={{ display: "grid", gap: 10 }}>
         {boxes.map((b) => {
-          const totalQty =
-            b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
+          const totalQty = b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
           const isSelected = selectedIds.has(b.id);
 
           return (
@@ -544,9 +423,7 @@ function BoxesInner() {
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{b.code}</div>
 
                 {b.name && <div style={{ fontWeight: 700 }}>{b.name}</div>}
-                <div style={{ opacity: 0.8 }}>
-                  {b.location_name ? b.location_name : "No location"}
-                </div>
+                <div style={{ opacity: 0.8 }}>{b.location_name ? b.location_name : "No location"}</div>
 
                 <div
                   style={{
@@ -566,50 +443,20 @@ function BoxesInner() {
                 </div>
               </div>
 
+              {/* ✅ Delete icon (prevents card navigation click) */}
               {!moveMode && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  {/* ✅ Edit (rename box) */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openEditBox(b);
-                    }}
+                <span
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
+                  <DeleteIconButton
+                    title="Delete box"
                     disabled={busy}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      color: "#111",
-                      background: "#fff",
-                      fontWeight: 900,
-                      borderRadius: 16,
-                      padding: "10px 14px",
-                    }}
-                  >
-                    Edit
-                  </button>
-
-                  {/* Delete */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      requestDeleteBox(b);
-                    }}
-                    disabled={busy}
-                    style={{
-                      border: "1px solid rgba(239,68,68,0.45)",
-                      color: "#b91c1c",
-                      background: "#fff",
-                      fontWeight: 900,
-                      borderRadius: 16,
-                      padding: "10px 14px",
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
+                    onClick={() => requestDeleteBox(b)}
+                  />
+                </span>
               )}
             </a>
           );
@@ -636,7 +483,16 @@ function BoxesInner() {
           zIndex: 2000,
         }}
       >
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
@@ -666,7 +522,16 @@ function BoxesInner() {
         title={moveMode ? "Exit move mode" : "Move boxes"}
         disabled={busy}
       >
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={moveMode ? "white" : "#111"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={moveMode ? "white" : "#111"}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <rect x="3" y="6.5" width="7" height="7" rx="1.5" />
           <rect x="14" y="10.5" width="7" height="7" rx="1.5" />
           <path d="M7 5.5c2.5-2 6.5-2 9 0" />
@@ -700,7 +565,7 @@ function BoxesInner() {
         >
           <div style={{ fontWeight: 900 }}>Selected: {selectedIds.size}</div>
 
-          <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ flex: 1, minWidth: 190 }}>
             <select
               value={destLocationId}
               onChange={(e) => onDestinationChange(e.target.value)}
@@ -734,53 +599,6 @@ function BoxesInner() {
           </button>
         </div>
       )}
-
-      {/* ✅ Edit box modal */}
-      <Modal
-        open={editOpen}
-        title={`Rename box ${editBoxRef.current?.code ?? ""}`}
-        onClose={() => {
-          if (busy) return;
-          setEditOpen(false);
-          editBoxRef.current = null;
-          setEditName("");
-        }}
-      >
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Change the box name (this does not move the box).
-        </p>
-
-        <input
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          placeholder="Box name"
-          autoFocus
-        />
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (busy) return;
-              setEditOpen(false);
-              editBoxRef.current = null;
-              setEditName("");
-            }}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={saveEditBox}
-            disabled={busy || !editName.trim()}
-            style={{ background: "#111", color: "#fff" }}
-          >
-            {busy ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </Modal>
 
       {/* Create Location Modal (from move) */}
       <Modal
@@ -844,8 +662,7 @@ function BoxesInner() {
           return (
             <>
               <p style={{ marginTop: 0 }}>
-                Move <strong>{info.count}</strong> box(es) to{" "}
-                <strong>{info.toLocationName}</strong>?
+                Move <strong>{info.count}</strong> box(es) to <strong>{info.toLocationName}</strong>?
               </p>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -892,7 +709,7 @@ function BoxesInner() {
           This will delete all items inside it and remove linked photos.
         </p>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <button
             type="button"
             onClick={() => {
@@ -905,14 +722,14 @@ function BoxesInner() {
             Cancel
           </button>
 
-          <button
-            type="button"
-            onClick={confirmDeleteBox}
+          {/* ✅ Confirm delete as icon */}
+          <DeleteIconButton
+            title="Confirm delete"
             disabled={busy}
-            style={{ background: "#ef4444", color: "#fff" }}
-          >
-            {busy ? "Deleting..." : "Delete"}
-          </button>
+            variant="solid"
+            onClick={confirmDeleteBox}
+          />
+          {busy && <span style={{ opacity: 0.75 }}>Deleting…</span>}
         </div>
       </Modal>
     </main>
@@ -929,7 +746,7 @@ function Modal({
 }: {
   open: boolean;
   title: string;
-  children: ReactNode;
+  children: React.ReactNode;
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -963,14 +780,7 @@ function Modal({
           padding: 14,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>{title}</h3>
 
           <button
