@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { EditItemButton } from "./EditItemButton";
+import EditItemModal from "./EditItemModal";
 import { DeleteItemButton } from "./DeleteItemButton";
 import { supabase } from "../lib/supabaseClient";
 import RequireAuth from "../components/RequireAuth";
@@ -21,10 +22,15 @@ type SearchItem = {
 };
 
 export default function SearchPage() {
+
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<SearchItem[]>([]);
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editItem, setEditItem] = useState<SearchItem | null>(null);
 
   useEffect(() => {
     const q = query.trim();
@@ -194,7 +200,26 @@ export default function SearchPage() {
                         {boxCode}
                       </a>
                     )}
-                    <EditItemButton itemId={i.id} boxCode={boxCode} />
+                    <button
+                      type="button"
+                      title="Edit item"
+                      onClick={() => {
+                        setEditItem(i);
+                        setEditModalOpen(true);
+                      }}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                    >
+                      <EditItemButton itemId={i.id} boxCode={boxCode} />
+                    </button>
+                          <EditItemModal
+                            open={editModalOpen}
+                            item={editItem}
+                            onClose={() => setEditModalOpen(false)}
+                            onSave={(updated) => {
+                              setItems((prev) => prev.map((it) => it.id === updated.id ? { ...it, ...updated } : it));
+                              setEditModalOpen(false);
+                            }}
+                          />
                     <DeleteItemButton itemId={i.id} onDeleted={handleDeleted} />
                   </div>
                 </div>

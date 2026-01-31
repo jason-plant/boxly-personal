@@ -55,6 +55,11 @@ export default function BoxPage() {
 
 
 
+  // ...state and variable declarations...
+
+
+
+
 
 
 
