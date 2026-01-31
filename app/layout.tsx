@@ -7,6 +7,7 @@ import BackButton from "./components/BackButton";
 import HeaderTitle from "./components/HeaderTitle";
 import HelpButton from "./components/HelpButton";
 import { UnsavedChangesProvider } from "./components/UnsavedChangesProvider";
+import ThemeInitializer from "./components/ThemeInitializer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,8 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           margin: 0,
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
-          background: "#f6f7fb",
-          color: "#111",
+          background: "var(--bg)",
+          color: "var(--text)",
         }}
       >
         <AuthProvider>
@@ -80,7 +81,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               transform: translateZ(0);
             }
           `}</style>
-
+            {/* Ensure theme is applied on client mount */}
+            <ThemeInitializer />
           {/* Everything that should blur sits inside this wrapper */}
           <div id="app-shell">
             {/* NAV BAR */}

@@ -1,28 +1,75 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Default palette: Stone (light) */
+  --bg: #F4F6F7;
+  --surface: #FBFCFD;
+  --border: #DDE2E6;
+  --text: #1F2933;
+  --muted: #6B7280;
+  --accent: #6B8FA3;
+
+  /* backwards compat */
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+/* dark theme overrides (applies when [data-theme="dark"] is set on <html>) */
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --surface: #0f1724;
+  --border: #1f2a37;
+  --text: #e6eef6;
+  --muted: #9aa6b2;
+  --accent: #5b90a6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Make core components use variables */
+.tap-btn,
+.nav-btn {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 1px 10px rgba(0,0,0,0.06);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tap-btn.primary,
+.nav-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* Menu / drawer backgrounds */
+.menu-drawer {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  color: var(--text);
 }
 /* ===== App-style buttons & links ===== */
 

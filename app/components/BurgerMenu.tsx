@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../lib/auth";
 
+// small theme toggle import (lazy loaded)
+const ThemeToggleSmall = React.lazy(() => import("./ThemeToggle").then((m) => ({ default: () => <m.default small /> })));
+
 /* ===== Icons ===== */
 import { IconLocations, IconBoxes, IconSearch, IconLabels, IconScanQR, IconScanItem } from "./Icons";
 const IconLogout = () => <span>🚪</span>;
@@ -155,8 +158,8 @@ export default function BurgerMenu() {
           right: 0,
           height: "100%",
           width: "min(86vw, 340px)",
-          background: "#fff",
-          borderLeft: "1px solid #e5e7eb",
+          background: "var(--surface)",
+          borderLeft: "1px solid var(--border)",
           boxShadow: "-20px 0 60px rgba(0,0,0,0.35)",
           padding: 16,
           display: "flex",
@@ -181,8 +184,8 @@ export default function BurgerMenu() {
               width: 40,
               height: 40,
               borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              background: "#fff",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
               fontWeight: 900,
             }}
           >
@@ -202,6 +205,9 @@ export default function BurgerMenu() {
             />
           ))}
 
+          {/* Settings */}
+          <MenuRow icon={<span>⚙️</span>} label="Settings" onClick={() => go("/settings")} />
+
           {user && (
             <MenuRow
               icon={<IconLogout />}
@@ -217,8 +223,21 @@ export default function BurgerMenu() {
           )}
         </div>
 
-        <div style={{ marginTop: "auto", opacity: 0.6, fontSize: 12 }}>
-          Tip: tap outside the menu to close.
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, opacity: 0.8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 700 }}>Appearance</div>
+              {/* theme toggle compact */}
+              <div style={{ marginLeft: "auto" }}>
+                <React.Suspense fallback={null}>
+                  {/* dynamically import to avoid SSR issues */}
+                  <ThemeToggleSmall />
+                </React.Suspense>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, opacity: 0.6 }}>Tip: tap outside the menu to close.</div>
+          </div>
         </div>
       </div>
     </div>
