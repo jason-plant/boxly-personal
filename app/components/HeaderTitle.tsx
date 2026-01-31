@@ -8,7 +8,13 @@ import { useAppIcon } from "./Icons";
 
 type Meta = { title: string; iconKey: string; href: string };
 
-export default function HeaderTitle() {
+
+type HeaderTitleProps = {
+  hideIcon?: boolean;
+  iconOnly?: boolean;
+};
+
+export default function HeaderTitle({ hideIcon = false, iconOnly = false }: HeaderTitleProps = {}) {
   const pathname = usePathname() || "/";
 
   const { user } = useAuth();
@@ -66,8 +72,8 @@ export default function HeaderTitle() {
 
   const Icon = useAppIcon(meta.iconKey as any);
 
-  return (
-    <Link href={meta.href} style={{ textDecoration: "none", color: "#111", display: "flex", alignItems: "center", gap: 10 }}>
+  if (iconOnly) {
+    return (
       <div style={{ width: 36, height: 36, flex: "0 0 auto", position: "relative" }}>
         <div
           className={`ht-layer ${animating ? "entering" : ""}`}
@@ -92,14 +98,43 @@ export default function HeaderTitle() {
           </div>
         </div>
       </div>
+    );
+  }
 
-      <div style={{ position: "relative", minWidth: 80, height: 36 }}>
+  return (
+    <Link href={meta.href} style={{ textDecoration: "none", color: "#111", display: "flex", alignItems: "center", gap: 10, minWidth: 0, width: '100%' }}>
+      {!hideIcon && (
+        <div style={{ width: 36, height: 36, flex: "0 0 auto", position: "relative" }}>
+          <div
+            className={`ht-layer ${animating ? "entering" : ""}`}
+            style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+            aria-hidden={!!prevMeta}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
+                color: "#111",
+              }}
+            >
+              {Icon}
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ position: "relative", minWidth: 80, height: 36, flex: 1, overflow: 'hidden' }}>
         {prevMeta && (
           <div className={`ht-layer exiting`} style={{ position: "absolute", left: 0, top: 0, right: 0 }}>
             <span style={{ fontWeight: 900, fontSize: 18, display: "inline-block", lineHeight: 1.9 }}>{prevMeta.title}</span>
           </div>
         )}
-
         <div
           className={`ht-layer ${animating ? "entering" : ""}`}
           style={{
@@ -108,14 +143,14 @@ export default function HeaderTitle() {
             top: 0,
             right: 0,
             minWidth: 80,
-            maxWidth: 220,
+            maxWidth: 320,
             textAlign: 'left',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
             justifyContent: 'center',
             lineHeight: 1.1,
-            marginLeft: 10,
+            marginLeft: hideIcon ? 0 : 10,
             overflow: 'hidden',
           }}
         >
@@ -140,13 +175,13 @@ export default function HeaderTitle() {
                   gap: 4,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: 220,
+                  maxWidth: 320,
                 }}>
-                  <span style={{ fontWeight: 700, fontSize: 17, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 120, display: 'inline-block' }}>{name}</span>
-                  <span style={{ fontWeight: 700, fontSize: 17, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 90, display: 'inline-block' }}>{inventory}</span>
+                  <span style={{ fontWeight: 700, fontSize: 17, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 180, display: 'inline-block' }}>{name}</span>
+                  <span style={{ fontWeight: 700, fontSize: 17, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 120, display: 'inline-block' }}>{inventory}</span>
                 </div>
                 {section && (
-                  <div style={{ fontWeight: 900, fontSize: 16, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 220, whiteSpace: 'nowrap' }}>{section}</div>
+                  <div style={{ fontWeight: 900, fontSize: 16, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 320, whiteSpace: 'nowrap' }}>{section}</div>
                 )}
               </>
             );

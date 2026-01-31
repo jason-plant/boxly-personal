@@ -108,14 +108,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   gap: 12,
                 }}
               >
-                {/* Dynamic page title + icon */}
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                  <HeaderTitle />
-                </div>
-                {/* Back button + Burger (stay top-right) */}
+                {/* Back button on far left */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {/* Back arrow (navigates history or fallback) */}
                   <BackButton />
+                </div>
+                {/* Title and section name, always visible and centered */}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <HeaderTitle hideIcon />
+                </div>
+                {/* Page icon and controls on right */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {/* Page icon only (moved from HeaderTitle) */}
+                  <HeaderTitle iconOnly />
                   {/* Help button */}
                   <HelpButton />
                   {/* Burger menu */}
