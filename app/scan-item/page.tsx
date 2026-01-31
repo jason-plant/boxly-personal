@@ -239,13 +239,46 @@ function ScanItemInner() {
     const safe = safeFileName(capturedFile.name || "photo.jpg");
     const path = `${userId}/${itemId}/${Date.now()}-${safe}`;
 
-    const uploadRes = await supabase.storage
-      .from("item-photos")
-      .upload(path, capturedFile, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: capturedFile.type || "image/jpeg",
-      });
+    // Compress the photo client-side to save Supabase storage
+    try {
+      const { compressImage } = await import("../../lib/image");
+      const compressed = await compressImage(capturedFile, { maxSize: 1280, quality: 0.8 });
+
+      // Use compressed image only if it gives a size reduction
+      const fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
+
+      const uploadRes = await supabase.storage
+        .from("item-photos")
+        .upload(path, fileToUpload, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: fileToUpload.type || "image/jpeg",
+        });
+
+      if (uploadRes.error) {
+        // rollback item if upload fails (best effort)
+        await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+        setError(uploadRes.error.message);
+        setBusy(false);
+        return;
+      }
+    } catch (e: any) {
+      // If compression fails, fall back to uploading the original file
+      const uploadRes = await supabase.storage
+        .from("item-photos")
+        .upload(path, capturedFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: capturedFile.type || "image/jpeg",
+        });
+
+      if (uploadRes.error) {
+        await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+        setError(uploadRes.error.message);
+        setBusy(false);
+        return;
+      }
+    }
 
     if (uploadRes.error) {
       // rollback item if upload fails (best effort)
