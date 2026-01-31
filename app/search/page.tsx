@@ -50,7 +50,7 @@ export default function SearchPage() {
       // ✅ Pull location via boxes.location_id -> locations.name
 
       // Search for items where the query matches item name, box code, box name, or location name
-      // Only search item name, box code, and box name in the query
+      // Only search item name in the query, filter other fields client-side
       const res = await supabase
         .from("items")
         .select(`
@@ -66,14 +66,14 @@ export default function SearchPage() {
           )
         `)
         .eq("owner_id", userId)
-        .or(`name.ilike.%${q}%,boxes.code.ilike.%${q}%,boxes.name.ilike.%${q}%`)
-        .limit(50);
+        .ilike("name", `%${q}%`)
+        .limit(100);
 
       if (res.error) {
         setError(res.error.message);
         setItems([]);
       } else {
-        // Also filter by location name client-side
+        // Filter by box code, box name, and location name client-side
         let results = (res.data ?? []) as unknown as SearchItem[];
         if (q) {
           const qLower = q.toLowerCase();
