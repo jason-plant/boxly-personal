@@ -97,8 +97,8 @@ export default function BurgerMenu() {
       lastX = e.touches[0].clientX;
       let dx = lastX - startX;
       if (mode === 'opening') {
-        // Move menu from off-screen (menuWidth) to 0
-        let menuDx = Math.max(0, Math.min(menuWidth, menuWidth + dx));
+        // Move menu from off-screen (menuWidth) to 0 as you swipe left
+        let menuDx = Math.max(0, Math.min(menuWidth, menuWidth - (startX - lastX)));
         setSwipeX(menuDx);
       } else if (mode === 'closing') {
         dx = Math.max(Math.min(dx, menuWidth), 0); // clamp between 0 and menuWidth
@@ -116,12 +116,16 @@ export default function BurgerMenu() {
         // If menu dragged more than 1/3 open, open it
         if ((menuWidth - (swipeX ?? menuWidth)) > menuWidth / 3) {
           setOpen(true);
+        } else {
+          setOpen(false);
         }
         setSwipeX(null);
         setSwipeMode(null);
       } else if (mode === 'closing') {
         if (dx > menuWidth / 3) {
           setOpen(false);
+        } else {
+          setOpen(true);
         }
         setSwipeX(null);
         setSwipeMode(null);
@@ -228,8 +232,18 @@ export default function BurgerMenu() {
         style={{
           position: "absolute",
           inset: 0,
-          background: open || swipeMode === 'opening' || swipeMode === 'closing'
-            ? `rgba(0,0,0,${Math.max(0.0, Math.min(0.82, (open ? 1 : 0) + ((swipeX ?? 0) / -340)))})`
+          background: (open || swipeMode === 'opening' || swipeMode === 'closing')
+            ? (() => {
+                let progress = 1;
+                if (swipeMode === 'opening' && swipeX !== null) {
+                  progress = 1 - (swipeX / 340);
+                } else if (swipeMode === 'closing' && swipeX !== null) {
+                  progress = 1 - (swipeX / 340);
+                } else if (!open) {
+                  progress = 0;
+                }
+                return `rgba(0,0,0,${Math.max(0, Math.min(0.82, progress * 0.82))})`;
+              })()
             : "rgba(0,0,0,0)",
           transition: swipeMode ? undefined : "background 220ms ease",
         }}
@@ -263,7 +277,7 @@ export default function BurgerMenu() {
                 ? `translateX(${swipeX}px)`
                 : open
                   ? 'translateX(0)'
-                  : 'translateX(16px)',
+                  : 'translateX(340px)',
           opacity:
             swipeMode
               ? 1
