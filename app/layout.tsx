@@ -116,10 +116,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <HeaderTitle hideIcon />
                 </div>
-                {/* Page icon and controls on right */}
+                {/* Controls on right (no page icon) */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {/* Page icon only (moved from HeaderTitle) */}
-                  <HeaderTitle iconOnly />
                   {/* Help button */}
                   <HelpButton />
                   {/* Burger menu */}
