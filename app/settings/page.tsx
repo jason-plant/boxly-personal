@@ -144,7 +144,7 @@ export default function SettingsPage() {
               {/* Icon style pickers */}
               <div style={{ marginBottom: 18 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>Icon style</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                <div className="settings-icon-grid" style={{ display: 'grid', gap: 10 }}>
                   {[
                     { key: 'locations', label: 'Locations' },
                     { key: 'boxes', label: 'Boxes' },
@@ -210,7 +210,7 @@ export default function SettingsPage() {
                 ))}
               </div>
               {/* Custom color controls */}
-              <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div className="settings-color-grid" style={{ marginTop: 16, display: "grid", gap: 12 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <span style={{ fontWeight: 700 }}>Text color</span>
                   <input type="color" value={customText || ""} onChange={e => handleCustomChange("text", e.target.value)} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
