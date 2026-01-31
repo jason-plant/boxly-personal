@@ -1,3 +1,4 @@
+  "use client";
   // Listen for edit modal open event from search page
   useEffect(() => {
     function handleOpenEditModal(e: any) {
