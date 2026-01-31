@@ -89,17 +89,7 @@ export default function ProfileSettingsPage() {
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontWeight: 700 }}>Avatar</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
-                  {avatar ? (
-                    <img src={avatar} alt="avatar" style={{ width: 48, height: 48, borderRadius: 24, objectFit: "cover", border: "1px solid var(--border)" }} />
-                  ) : (
-                    <div style={{ width: 48, height: 48, borderRadius: 24, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center", color: "#888" }}>?</div>
-                  )}
-                  <input type="file" accept="image/*" onChange={handleAvatarUpload} />
-                </div>
-              </div>
+
 
               <div>
                 <label style={{ fontWeight: 700, color: "#b91c1c" }}>Danger zone</label>

@@ -22,21 +22,19 @@ export default function HeaderTitle() {
   const { user } = useAuth();
   const userName = user?.user_metadata?.name;
   const nextMeta = useMemo<Meta>(() => {
+    const namePrefix = userName && userName.trim() ? `${userName}'s Inventory ` : '';
     if (pathname === "/" || pathname === "/locations") {
-      if (userName && userName.trim()) {
-        return { title: `${userName}'s Inventory`, Icon: IconLocations, href: "/locations" };
-      }
-      return { title: "Locations", Icon: IconLocations, href: "/locations" };
+      return { title: `${namePrefix}Locations`, Icon: IconLocations, href: "/locations" };
     }
-    if (pathname.startsWith("/boxes")) return { title: "Boxes", Icon: IconBoxes, href: "/boxes" };
-    if (pathname.startsWith("/search")) return { title: "Search", Icon: IconSearch, href: "/search" };
-    if (pathname.startsWith("/labels")) return { title: "Labels", Icon: IconLabels, href: "/labels" };
-    if (pathname.startsWith("/scan-item")) return { title: "Scan Item", Icon: IconScanItem, href: "/scan-item" };
-    if (pathname.startsWith("/scan")) return { title: "Scan QR", Icon: IconScanQR, href: "/scan" };
+    if (pathname.startsWith("/boxes")) return { title: `${namePrefix}Boxes`, Icon: IconBoxes, href: "/boxes" };
+    if (pathname.startsWith("/search")) return { title: `${namePrefix}Search`, Icon: IconSearch, href: "/search" };
+    if (pathname.startsWith("/labels")) return { title: `${namePrefix}Labels`, Icon: IconLabels, href: "/labels" };
+    if (pathname.startsWith("/scan-item")) return { title: `${namePrefix}Scan Item`, Icon: IconScanItem, href: "/scan-item" };
+    if (pathname.startsWith("/scan")) return { title: `${namePrefix}Scan QR`, Icon: IconScanQR, href: "/scan" };
     if (pathname.startsWith("/box/")) {
       const parts = pathname.split("/").filter(Boolean);
       const code = parts[1] ? decodeURIComponent(parts[1]) : "Box";
-      return { title: code, Icon: IconBoxes, href: `/box/${encodeURIComponent(code)}` };
+      return { title: `${namePrefix}${code}`, Icon: IconBoxes, href: `/box/${encodeURIComponent(code)}` };
     }
     // Default: show personalized inventory if name set
     if (userName && userName.trim()) {
