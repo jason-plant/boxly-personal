@@ -104,6 +104,15 @@ body {
 .modal-backdrop { background: rgba(0,0,0,0); transition: background 220ms ease; }
 .modal-backdrop.show { background: rgba(0,0,0,0.55); }
 .modal-backdrop.exiting { background: rgba(0,0,0,0); }
+
+/* top-right variants */
+.modal-backdrop.top-right { justify-content: flex-end; align-items: flex-start; }
+
 .modal-panel { transform: translateY(12px); opacity: 0; transition: transform 220ms cubic-bezier(.2,.9,.3,1), opacity 220ms cubic-bezier(.2,.9,.3,1); }
 .modal-panel.show { transform: translateY(0); opacity: 1; }
 .modal-panel.exiting { transform: translateY(12px); opacity: 0; }
+
+/* panel slides down slightly when anchored top-right */
+.modal-panel.top-right { transform: translateY(-8px); }
+.modal-panel.top-right.show { transform: translateY(0); opacity: 1; }
+.modal-panel.top-right.exiting { transform: translateY(-8px); opacity: 0; }

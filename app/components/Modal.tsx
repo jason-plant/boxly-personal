@@ -7,11 +7,13 @@ export default function Modal({
   title,
   children,
   onClose,
+  anchor = "bottom",
 }: {
   open: boolean;
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  anchor?: "bottom" | "top-right" | "center";
 }) {
   const [mounted, setMounted] = useState(open);
   const [exiting, setExiting] = useState(false);
@@ -84,6 +86,28 @@ export default function Modal({
 
   if (!mounted) return null;
 
+  // container style varies based on anchor
+  const containerStyle: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 4000,
+    display: "flex",
+    padding: 12,
+    justifyContent: anchor === "top-right" ? "flex-end" : "center",
+    alignItems: anchor === "top-right" ? "flex-start" : "flex-end",
+  };
+
+  const panelStyle: React.CSSProperties = {
+    width: anchor === "top-right" ? undefined : "100%",
+    maxWidth: anchor === "top-right" ? 420 : 520,
+    background: "#fff",
+    borderRadius: 18,
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+    padding: 14,
+    marginTop: anchor === "top-right" ? 56 : undefined, // offset beneath navbar
+  };
+
   return (
     <div
       role="dialog"
@@ -91,29 +115,13 @@ export default function Modal({
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className={`modal-backdrop ${exiting ? "exiting" : "show"}`}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 4000,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        padding: 12,
-      }}
+      className={`modal-backdrop ${anchor === "top-right" ? "top-right" : ""} ${exiting ? "exiting" : "show"}`}
+      style={containerStyle}
     >
       <div
         ref={panelRef}
-        className={`modal-panel ${exiting ? "exiting" : "show"}`}
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          background: "#fff",
-          borderRadius: 18,
-          border: "1px solid #e5e7eb",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-          padding: 14,
-        }}
+        className={`modal-panel ${anchor === "top-right" ? "top-right" : ""} ${exiting ? "exiting" : "show"}`}
+        style={panelStyle}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>{title}</h3>

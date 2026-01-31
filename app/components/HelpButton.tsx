@@ -138,10 +138,10 @@ export default function HelpButton() {
         </svg>
       </button>
 
-      <Modal open={open} title={`Help — ${meta.title}`} onClose={() => setOpen(false)}>
+      <Modal open={open} title={`Help — ${meta.title}`} onClose={() => setOpen(false)} anchor="top-right">
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 14 }}>{meta.content}</div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button onClick={() => setOpen(false)} className="tap-btn">Close</button>
           </div>
         </div>
