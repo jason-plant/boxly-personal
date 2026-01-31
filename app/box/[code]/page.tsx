@@ -53,6 +53,9 @@ function getStoragePathFromPublicUrl(url: string) {
 }
 
 export default function BoxPage() {
+
+    // ...existing state and variable declarations...
+
     // Listen for edit modal open event from search page
     useEffect(() => {
       function handleOpenEditModal(e: any) {
