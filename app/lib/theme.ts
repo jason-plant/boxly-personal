@@ -1,6 +1,14 @@
-export type PaletteKey = "stone" | "warm" | "gray";
+export type PaletteKey = "ivory" | "stone" | "warm" | "charcoal";
 
 export const PALETTES: Record<PaletteKey, { bg: string; surface: string; border: string; text: string; muted: string; accent: string; }> = {
+  ivory: {
+    bg: "#FBFBFA",
+    surface: "#FFFFFF",
+    border: "#EFEDEB",
+    text: "#111827",
+    muted: "#6B7280",
+    accent: "#9AA4A8",
+  },
   stone: {
     bg: "#F4F6F7",
     surface: "#FBFCFD",
@@ -17,13 +25,13 @@ export const PALETTES: Record<PaletteKey, { bg: string; surface: string; border:
     muted: "#6B6661",
     accent: "#927E6B",
   },
-  gray: {
-    bg: "#F7F7F8",
+  charcoal: {
+    bg: "#ECEFF1",
     surface: "#FFFFFF",
-    border: "#E6E6E8",
-    text: "#2B2B2F",
-    muted: "#7B7B82",
-    accent: "#4B7A74",
+    border: "#D6D8DB",
+    text: "#0F1724",
+    muted: "#6B7280",
+    accent: "#33363A",
   },
 };
 
@@ -40,8 +48,8 @@ export function getStoredPalette(): PaletteKey {
     const p = localStorage.getItem("palette") as PaletteKey | null;
     if (p && PALETTES[p]) return p;
   } catch (e) {}
-  return "stone";
-}
+  return "ivory";
+} 
 
 export function applyTheme(theme: "light" | "dark", palette: PaletteKey) {
   const root = document.documentElement;

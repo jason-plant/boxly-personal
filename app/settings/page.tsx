@@ -38,7 +38,7 @@ export default function SettingsPage() {
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {(Object.keys(PALETTES) as Array<keyof typeof PALETTES>).map((k) => (
+            {(["ivory", "stone", "warm", "charcoal"] as Array<keyof typeof PALETTES>).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -46,20 +46,41 @@ export default function SettingsPage() {
                   setPalette(k);
                   applyTheme(theme, k as any);
                 }}
+                aria-pressed={palette === k}
                 style={{
                   display: "flex",
+                  flexDirection: "column",
                   gap: 8,
                   alignItems: "center",
-                  padding: 8,
-                  borderRadius: 10,
+                  padding: 10,
+                  borderRadius: 12,
                   border: palette === k ? "2px solid var(--accent)" : "1px solid var(--border)",
                   background: "var(--surface)",
+                  minWidth: 96,
+                  cursor: "pointer",
                 }}
               >
-                <div style={{ width: 36, height: 24, borderRadius: 6, background: PALETTES[k].bg, border: `1px solid ${PALETTES[k].border}` }} />
-                <div style={{ fontWeight: 800 }}>{k}</div>
+                <div style={{ width: 56, height: 30, borderRadius: 8, background: PALETTES[k].bg, border: `1px solid ${PALETTES[k].border}` }} />
+                <div style={{ fontWeight: 800, textTransform: "capitalize" }}>{k}</div>
               </button>
             ))}
+          </div>
+
+          {/* Live preview */}
+          <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ background: "var(--bg)", border: "1px solid var(--border)", padding: 12, borderRadius: 10 }}>
+                <div style={{ background: "var(--surface)", padding: 12, borderRadius: 8, border: "1px solid var(--border)", maxWidth: 360 }}>
+                  <div style={{ fontWeight: 900, fontSize: 18 }}>App preview</div>
+                  <div style={{ marginTop: 8, color: "var(--muted)" }}>This card shows how the palette affects surface, borders, text, and accent.</div>
+
+                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                    <button className="tap-btn primary">Accent button</button>
+                    <button className="tap-btn">Neutral</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style={{ marginTop: 12, opacity: 0.85 }}>
