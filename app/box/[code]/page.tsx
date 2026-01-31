@@ -681,10 +681,11 @@ export default function BoxPage() {
 
     for (let i = 0; i < finalCount; i++) {
       const b = box as BoxRow;
-      itemsHtml.push(`<div class="label" style="${labelStyle}"><div class="code">${b.code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}${b.location ? `<div class="loc">${b.location}</div>` : ""}<img src="${qr}" /></div>`);
+      itemsHtml.push(`<div class="label" style="${labelStyle}"><div class="code">${b.code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}${b.location ? `<div class="loc">${b.location}</div>` : ""}<img src="${qr}" /><div style="font-size:10px;margin-top:10px;word-break:break-all">${url}</div></div>`);
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:8px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden} .label img{width:100%;height:auto;display:block;margin-top:6px} .label .code{font-weight:900;font-size:16px;text-align:center;width:100%}.no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label - ${box.code}</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:8px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden} .label img{width:100%;height:auto;display:block;margin-top:6px} .label .code{font-weight:900;font-size:16px;text-align:center;width:100%}.no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`;
+
 
     win.document.open();
     win.document.write(html);
@@ -742,7 +743,7 @@ export default function BoxPage() {
       document.body.removeChild(el);
     }
 
-    pdf.save("label.pdf");
+    pdf.save(`label-${box.code}.pdf`);
   }
 
   // Bluetooth print for single box
