@@ -9,9 +9,9 @@ export const metadata: Metadata = {
   title: "Storage Inventory",
   description: "Box and item inventory system",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+    icon: "/icons/icon-192.png",
+    shortcut: "/icons/icon-32.png",
+    apple: "/icons/apple-touch-180.png",
   },
 };
 
@@ -103,7 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   }}
                 >
                   <div style={{display: "flex", alignItems: "center", gap: 8}}>
-                    <Image src="/logo.png" alt="Storage Inventory" width={36} height={36} />
+                    <Image src="/icons/icon-32.png" alt="Storage Inventory" width={36} height={36} />
                     <span style={{fontWeight: 900, fontSize: 18}}>Storage Inventory</span>
                   </div>
                 </a>
