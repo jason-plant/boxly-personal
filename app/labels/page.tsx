@@ -380,6 +380,40 @@ export default function LabelsPage() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => setShowPrintModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Print selected</button>
                   <button onClick={() => exportSelectedPDF()} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Export PDF</button>
+                  <button onClick={exportSelectedImages} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Export Image</button>
+                    // Export selected labels as PNG images
+                    async function exportSelectedImages() {
+                      if (selected.length === 0) return;
+                      const html2canvas = (await import("html2canvas")).default;
+                      const finalCount = parseCopies();
+                      if (finalCount < 1) return alert("Please enter a quantity of at least 1");
+                      for (let i = 0; i < finalCount; i++) {
+                        for (const code of selected) {
+                          const b = boxes.find((bb) => bb.code === code)!;
+                          // create offscreen element
+                          const el = document.createElement("div");
+                          el.style.width = "320px";
+                          el.style.padding = "8px";
+                          el.style.boxSizing = "border-box";
+                          el.style.border = "1px solid #000";
+                          el.style.background = "#fff";
+                          el.innerHTML = `<div style="font-weight:900;font-size:26px;text-align:center;width:100%">${code}</div>${b.name ? `<div style=\"text-align:center;font-size:12px;margin-top:6px\">${b.name}</div>` : ""}${b.location ? `<div style=\"text-align:center;font-size:11px;margin-top:4px\">${b.location}</div>` : ""}<img src=\"${qrMap[code]}\" style=\"width:70%;display:block;margin:6px auto\" />`;
+                          el.style.position = "absolute";
+                          el.style.left = "-9999px";
+                          document.body.appendChild(el);
+                          const canvas = await html2canvas(el, { scale: 2 });
+                          const dataUrl = canvas.toDataURL("image/png");
+                          // Download the image
+                          const a = document.createElement("a");
+                          a.href = dataUrl;
+                          a.download = `${code}.png`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          document.body.removeChild(el);
+                        }
+                      }
+                    }
                   <button onClick={() => setShowPrintModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Bluetooth print</button>
                   <button onClick={() => setShowShareModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Share</button>
                   <button onClick={clearSelection} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Clear</button>
