@@ -131,7 +131,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               style={{
                 maxWidth: 1100,
                 margin: "0 auto",
-                padding: "14px 14px 28px",
+                padding: "15px 14px 28px",
               }}
             >
               {children}
