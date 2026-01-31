@@ -419,10 +419,11 @@ export default function LabelsPage() {
             return (
               <div
                 key={b.id}
-                onPointerDown={() => startLongPress(b.code)}
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={(e) => { if ((e as React.PointerEvent).pointerType === "touch") (e as any).preventDefault(); startLongPress(b.code); }}
                 onPointerUp={() => cancelLongPress(b.code)}
                 onPointerLeave={() => cancelLongPress(b.code)}
-                onClick={() => {
+                onClick={(e) => {
                   if (longPressFired.current[b.code]) {
                     // long press already toggled selection
                     longPressFired.current[b.code] = false;
@@ -442,6 +443,11 @@ export default function LabelsPage() {
                   borderRadius: 12,
                   breakInside: "avoid",
                   cursor: "pointer",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  userSelect: "none",
+                  WebkitTouchCallout: "none",
+                  touchAction: "manipulation",
                 }}
               >
                 {isSelected && <div className="selected-badge">✓</div>}
@@ -457,7 +463,9 @@ export default function LabelsPage() {
                     <img
                       src={qrMap[b.code]}
                       alt={`QR for ${b.code}`}
-                      style={{ width: "100%", maxWidth: 240, display: "block" }}
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      style={{ width: "70%", maxWidth: 240, display: "block", margin: "6px auto", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                     />
                   ) : (
                     <div style={{ fontSize: 12, opacity: 0.7 }}>Generating QR…</div>
