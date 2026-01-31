@@ -271,6 +271,7 @@ export default function SettingsPage() {
                             localStorage.setItem("customText", t.text);
                             localStorage.setItem("customBg", t.bg);
                             localStorage.setItem("customSurface", t.surface);
+                            localStorage.setItem("palette", "custom");
                             window.location.reload();
                           }}
                         >Apply</button>
