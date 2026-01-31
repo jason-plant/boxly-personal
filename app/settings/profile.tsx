@@ -24,18 +24,6 @@ export default function ProfileSettingsPage() {
         setName(data.user.user_metadata?.name || "");
       }
       setLoading(false);
-      async function handleNameSave(e: React.FormEvent) {
-        e.preventDefault();
-        setStatus("");
-        setLoading(true);
-        const { error } = await supabase.auth.updateUser({ data: { name } });
-        if (error) {
-          setStatus("Failed to update name: " + error.message);
-        } else {
-          setStatus("Name updated!");
-        }
-        setLoading(false);
-      }
     }
     loadUser();
   }, []);
