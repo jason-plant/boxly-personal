@@ -1,3 +1,27 @@
+// Button color customizations
+export function setCustomButtonColors({ primary, danger, neutral }: { primary?: string; danger?: string; neutral?: string }) {
+  if (primary) {
+    document.documentElement.style.setProperty('--btn-primary', primary);
+    localStorage.setItem('customBtnPrimary', primary);
+  }
+  if (danger) {
+    document.documentElement.style.setProperty('--btn-danger', danger);
+    localStorage.setItem('customBtnDanger', danger);
+  }
+  if (neutral) {
+    document.documentElement.style.setProperty('--btn-neutral', neutral);
+    localStorage.setItem('customBtnNeutral', neutral);
+  }
+}
+
+export function applyCustomButtonColors() {
+  const primary = localStorage.getItem('customBtnPrimary');
+  const danger = localStorage.getItem('customBtnDanger');
+  const neutral = localStorage.getItem('customBtnNeutral');
+  if (primary) document.documentElement.style.setProperty('--btn-primary', primary);
+  if (danger) document.documentElement.style.setProperty('--btn-danger', danger);
+  if (neutral) document.documentElement.style.setProperty('--btn-neutral', neutral);
+}
 export type PaletteKey = "ivory" | "stone" | "warm" | "anthracite" | "custom";
 
 export const PALETTES: Record<Extract<PaletteKey, 'ivory' | 'stone' | 'warm' | 'anthracite'>, { bg: string; surface: string; border: string; text: string; muted: string; accent: string; }> = {
