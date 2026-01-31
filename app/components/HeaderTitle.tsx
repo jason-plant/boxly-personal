@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import { useAuth } from "../lib/auth";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,8 +19,15 @@ type Meta = { title: string; Icon: React.ComponentType; href: string };
 export default function HeaderTitle() {
   const pathname = usePathname() || "/";
 
+  const { user } = useAuth();
+  const userName = user?.user_metadata?.name;
   const nextMeta = useMemo<Meta>(() => {
-    if (pathname === "/" || pathname === "/locations") return { title: "Locations", Icon: IconLocations, href: "/locations" };
+    if (pathname === "/" || pathname === "/locations") {
+      if (userName && userName.trim()) {
+        return { title: `${userName}'s Inventory`, Icon: IconLocations, href: "/locations" };
+      }
+      return { title: "Locations", Icon: IconLocations, href: "/locations" };
+    }
     if (pathname.startsWith("/boxes")) return { title: "Boxes", Icon: IconBoxes, href: "/boxes" };
     if (pathname.startsWith("/search")) return { title: "Search", Icon: IconSearch, href: "/search" };
     if (pathname.startsWith("/labels")) return { title: "Labels", Icon: IconLabels, href: "/labels" };
@@ -30,8 +38,12 @@ export default function HeaderTitle() {
       const code = parts[1] ? decodeURIComponent(parts[1]) : "Box";
       return { title: code, Icon: IconBoxes, href: `/box/${encodeURIComponent(code)}` };
     }
+    // Default: show personalized inventory if name set
+    if (userName && userName.trim()) {
+      return { title: `${userName}'s Inventory`, Icon: IconHome, href: "/locations" };
+    }
     return { title: "Storage Inventory", Icon: IconHome, href: "/locations" };
-  }, [pathname]);
+  }, [pathname, userName]);
 
   const [prevMeta, setPrevMeta] = useState<Meta | null>(null);
   const [meta, setMeta] = useState<Meta>(nextMeta);
