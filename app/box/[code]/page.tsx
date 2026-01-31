@@ -975,7 +975,21 @@ export default function BoxPage() {
                         title={!moveMode && hasPhoto ? "Tap to view photo" : undefined}
                       >
                         {i.name}
-                        {hasPhoto ? <span style={{ opacity: 0.6 }}>📷</span> : null}
+                        {hasPhoto ? (
+                          <img
+                            src={i.photo_url!}
+                            alt={i.name}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              objectFit: "cover",
+                              borderRadius: 6,
+                              marginLeft: 6,
+                              border: "1px solid #e5e7eb",
+                              boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+                            }}
+                          />
+                        ) : null}
                       </button>
                     </div>
 
