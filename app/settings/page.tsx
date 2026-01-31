@@ -206,24 +206,57 @@ export default function SettingsPage() {
                         <button
                           aria-label="Edit theme"
                           className="tap-btn"
-                          style={{ padding: '2px 8px', fontSize: 13 }}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 10,
+                            border: '1px solid var(--border)',
+                            background: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 16,
+                            marginLeft: 2,
+                            marginRight: 2,
+                            boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                            cursor: 'pointer',
+                          }}
                           onClick={() => {
                             setCustomText(t.text);
                             setCustomBg(t.bg);
                             setCustomSurface(t.surface);
                             setCustomName(t.name);
                           }}
-                        >✏️</button>
+                        >
+                          <span role="img" aria-label="Edit">✏️</span>
+                        </button>
                         <button
                           aria-label="Delete theme"
                           className="tap-btn danger"
-                          style={{ padding: '2px 8px', fontSize: 13 }}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 10,
+                            border: '1px solid #e5e7eb',
+                            background: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 16,
+                            marginLeft: 2,
+                            marginRight: 2,
+                            color: '#b91c1c',
+                            boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                            cursor: 'pointer',
+                          }}
                           onClick={() => {
                             const next = savedThemes.filter((_, i) => i !== idx);
                             setSavedThemes(next);
                             localStorage.setItem("savedThemes", JSON.stringify(next));
                           }}
-                        >🗑️</button>
+                        >
+                          <span role="img" aria-label="Delete">🗑️</span>
+                        </button>
                         <button
                           aria-label="Apply theme to all pages"
                           className="tap-btn primary"
