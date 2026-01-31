@@ -7,12 +7,15 @@ import type { IconKey } from "../lib/iconSettings";
 import React, { useEffect, useState } from "react";
 import RequireAuth from "../components/RequireAuth";
 import ThemeToggle from "../components/ThemeToggle";
-import { applyTheme, getStoredPalette, getStoredTheme, PALETTES } from "../lib/theme";
+import { applyTheme, getStoredPalette, getStoredTheme, PALETTES, setCustomButtonColors } from "../lib/theme";
 import ProfileSettingsPage from "./profile";
 import EditIconButton from "../components/EditIconButton";
 import DeleteIconButton from "../components/DeleteIconButton";
 
 export default function SettingsPage() {
+  const [customBtnPrimary, setCustomBtnPrimary] = useState<string>(typeof window !== "undefined" ? localStorage.getItem("customBtnPrimary") || "" : "");
+  const [customBtnDanger, setCustomBtnDanger] = useState<string>(typeof window !== "undefined" ? localStorage.getItem("customBtnDanger") || "" : "");
+  const [customBtnNeutral, setCustomBtnNeutral] = useState<string>(typeof window !== "undefined" ? localStorage.getItem("customBtnNeutral") || "" : "");
   const { iconSettings, setIconStyle } = useIconSettings();
   const [tab, setTab] = useState<'appearance' | 'profile'>('appearance');
   const [theme, setTheme] = useState<"light" | "dark">((typeof window !== "undefined" && getStoredTheme()) || "light");
@@ -73,9 +76,15 @@ export default function SettingsPage() {
     setCustomText("");
     setCustomBg("");
     setCustomSurface("");
+    setCustomBtnPrimary("");
+    setCustomBtnDanger("");
+    setCustomBtnNeutral("");
     localStorage.removeItem("customText");
     localStorage.removeItem("customBg");
     localStorage.removeItem("customSurface");
+    localStorage.removeItem("customBtnPrimary");
+    localStorage.removeItem("customBtnDanger");
+    localStorage.removeItem("customBtnNeutral");
     // re-apply palette/theme
     applyTheme(theme, palette as any);
   }
@@ -213,6 +222,18 @@ export default function SettingsPage() {
                 <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <span style={{ fontWeight: 700 }}>Card color</span>
                   <input type="color" value={customSurface || ""} onChange={e => handleCustomChange("surface", e.target.value)} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontWeight: 700 }}>Button (primary)</span>
+                  <input type="color" value={customBtnPrimary || ""} onChange={e => { setCustomBtnPrimary(e.target.value); setCustomButtonColors({ primary: e.target.value }); }} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontWeight: 700 }}>Button (danger)</span>
+                  <input type="color" value={customBtnDanger || ""} onChange={e => { setCustomBtnDanger(e.target.value); setCustomButtonColors({ danger: e.target.value }); }} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontWeight: 700 }}>Button (neutral)</span>
+                  <input type="color" value={customBtnNeutral || ""} onChange={e => { setCustomBtnNeutral(e.target.value); setCustomButtonColors({ neutral: e.target.value }); }} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
                 </label>
               </div>
               <button onClick={resetThemeOverrides} className="tap-btn" style={{ marginTop: 10, width: 180 }}>
