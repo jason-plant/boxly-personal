@@ -22,25 +22,42 @@ export default function HeaderTitle() {
   const { user } = useAuth();
   const userName = user?.user_metadata?.name;
   const nextMeta = useMemo<Meta>(() => {
-    const namePrefix = userName && userName.trim() ? `${userName}'s Inventory ` : '';
-    if (pathname === "/" || pathname === "/locations") {
-      return { title: `${namePrefix}Locations`, Icon: IconLocations, href: "/locations" };
+    let section = '';
+    if (pathname === "/" || pathname === "/locations") section = 'Locations';
+    else if (pathname.startsWith("/boxes")) section = 'Boxes';
+    else if (pathname.startsWith("/search")) section = 'Search';
+    else if (pathname.startsWith("/labels")) section = 'Labels';
+    else if (pathname.startsWith("/scan-item")) section = 'Scan Item';
+    else if (pathname.startsWith("/scan")) section = 'Scan QR';
+    else if (pathname.startsWith("/box/")) {
+      const parts = pathname.split("/").filter(Boolean);
+      section = parts[1] ? decodeURIComponent(parts[1]) : "Box";
     }
-    if (pathname.startsWith("/boxes")) return { title: `${namePrefix}Boxes`, Icon: IconBoxes, href: "/boxes" };
-    if (pathname.startsWith("/search")) return { title: `${namePrefix}Search`, Icon: IconSearch, href: "/search" };
-    if (pathname.startsWith("/labels")) return { title: `${namePrefix}Labels`, Icon: IconLabels, href: "/labels" };
-    if (pathname.startsWith("/scan-item")) return { title: `${namePrefix}Scan Item`, Icon: IconScanItem, href: "/scan-item" };
-    if (pathname.startsWith("/scan")) return { title: `${namePrefix}Scan QR`, Icon: IconScanQR, href: "/scan" };
-    if (pathname.startsWith("/box/")) {
+    let title;
+    if (userName && userName.trim()) {
+      if (section) {
+        title = `${userName}'s Inventory\n${section}`;
+      } else {
+        title = `${userName}'s Inventory`;
+      }
+    } else {
+      title = section ? `Storage Inventory\n${section}` : 'Storage Inventory';
+    }
+    let Icon = IconHome;
+    let href = "/locations";
+    if (pathname === "/" || pathname === "/locations") { Icon = IconLocations; href = "/locations"; }
+    else if (pathname.startsWith("/boxes")) { Icon = IconBoxes; href = "/boxes"; }
+    else if (pathname.startsWith("/search")) { Icon = IconSearch; href = "/search"; }
+    else if (pathname.startsWith("/labels")) { Icon = IconLabels; href = "/labels"; }
+    else if (pathname.startsWith("/scan-item")) { Icon = IconScanItem; href = "/scan-item"; }
+    else if (pathname.startsWith("/scan")) { Icon = IconScanQR; href = "/scan"; }
+    else if (pathname.startsWith("/box/")) {
       const parts = pathname.split("/").filter(Boolean);
       const code = parts[1] ? decodeURIComponent(parts[1]) : "Box";
-      return { title: `${namePrefix}${code}`, Icon: IconBoxes, href: `/box/${encodeURIComponent(code)}` };
+      Icon = IconBoxes;
+      href = `/box/${encodeURIComponent(code)}`;
     }
-    // Default: show personalized inventory if name set
-    if (userName && userName.trim()) {
-      return { title: `${userName}'s Inventory`, Icon: IconHome, href: "/locations" };
-    }
-    return { title: "Storage Inventory", Icon: IconHome, href: "/locations" };
+    return { title, Icon, href };
   }, [pathname, userName]);
 
   const [prevMeta, setPrevMeta] = useState<Meta | null>(null);
@@ -102,7 +119,21 @@ export default function HeaderTitle() {
         )}
 
         <div className={`ht-layer ${animating ? "entering" : ""}`} style={{ position: "absolute", left: 0, top: 0, right: 0 }}>
-          <span style={{ fontWeight: 900, fontSize: 18, display: "inline-block", lineHeight: 1.9 }}>{meta.title}</span>
+          {meta.title.split('\n').map((line, i) => (
+            <span
+              key={i}
+              style={{
+                fontWeight: 900,
+                fontSize: i === 0 ? 18 : 15,
+                display: "block",
+                lineHeight: 1.3,
+                marginTop: i === 0 ? 0 : 2,
+                color: i === 0 ? undefined : 'var(--muted)'
+              }}
+            >
+              {line}
+            </span>
+          ))}
         </div>
       </div>
     </Link>
