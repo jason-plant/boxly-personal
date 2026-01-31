@@ -2,11 +2,14 @@
  * Client-side image compression utilities using `browser-image-compression`.
  * - Handles EXIF orientation and uses Web Workers for speed.
  * - Converts to WebP when supported for better size savings.
+ *
+ * IMPORTANT: This module avoids importing `browser-image-compression` at module
+ * scope to remain safe during server-side builds. The library is dynamically
+ * imported at runtime inside `compressImage` so it's only loaded in the browser.
  */
-import imageCompression from "browser-image-compression";
 
 export async function supportsWebP() {
-  if (!self.document) return false;
+  if (typeof window === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
     if (!canvas.getContext) return false;
@@ -24,6 +27,10 @@ export type CompressOptions = {
 };
 
 export async function compressImage(file: File, opts: CompressOptions = {}): Promise<File> {
+  if (typeof window === "undefined") {
+    throw new Error("compressImage must be called in the browser");
+  }
+
   const { maxSize = 1280, quality = 0.8, maxSizeMB = null } = opts;
 
   const useWebP = opts.mimeType ? opts.mimeType === "image/webp" : await supportsWebP();
@@ -36,6 +43,9 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
     useWebWorker: true,
     ...(maxSizeMB ? { maxSizeMB } : {}),
   };
+
+  // Dynamically import the browser-only library at runtime (client only)
+  const { default: imageCompression } = await import("browser-image-compression");
 
   // browser-image-compression handles EXIF orientation and returns a File/Blob
   const compressed: Blob = await imageCompression(file, options as any);

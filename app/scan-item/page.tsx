@@ -240,6 +240,8 @@ function ScanItemInner() {
     const path = `${userId}/${itemId}/${Date.now()}-${safe}`;
 
     // Compress the photo client-side to save Supabase storage
+    let uploadRes: any = null;
+
     try {
       const { compressImage } = await import("../../lib/image");
       const compressed = await compressImage(capturedFile, { maxSize: 1280, quality: 0.8 });
@@ -247,7 +249,7 @@ function ScanItemInner() {
       // Use compressed image only if it gives a size reduction
       const fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
 
-      const uploadRes = await supabase.storage
+      uploadRes = await supabase.storage
         .from("item-photos")
         .upload(path, fileToUpload, {
           cacheControl: "3600",
@@ -264,7 +266,7 @@ function ScanItemInner() {
       }
     } catch (e: any) {
       // If compression fails, fall back to uploading the original file
-      const uploadRes = await supabase.storage
+      uploadRes = await supabase.storage
         .from("item-photos")
         .upload(path, capturedFile, {
           cacheControl: "3600",
@@ -280,7 +282,7 @@ function ScanItemInner() {
       }
     }
 
-    if (uploadRes.error) {
+    if (uploadRes?.error) {
       // rollback item if upload fails (best effort)
       await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
       setError(uploadRes.error.message);
