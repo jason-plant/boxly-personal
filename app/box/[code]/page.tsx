@@ -1,3 +1,14 @@
+  // Listen for edit modal open event from search page
+  useEffect(() => {
+    function handleOpenEditModal(e: any) {
+      const { itemId, boxCode } = e.detail || {};
+      if (boxCode && code && boxCode !== code) return; // only open if box matches
+      const item = items.find((it) => it.id === itemId);
+      if (item) openEditItem(item);
+    }
+    window.addEventListener("open-edit-item-modal", handleOpenEditModal);
+    return () => window.removeEventListener("open-edit-item-modal", handleOpenEditModal);
+  }, [items, code]);
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
