@@ -37,7 +37,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 10, alignItems: "start" }}>
             {(["ivory", "stone", "warm", "charcoal"] as Array<keyof typeof PALETTES>).map((k) => (
               <button
                 key={k}
@@ -56,7 +56,7 @@ export default function SettingsPage() {
                   borderRadius: 12,
                   border: palette === k ? "2px solid var(--accent)" : "1px solid var(--border)",
                   background: "var(--surface)",
-                  minWidth: 96,
+                  width: "100%",
                   cursor: "pointer",
                 }}
               >
