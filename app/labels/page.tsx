@@ -79,7 +79,7 @@ export default function LabelsPage() {
             marginBottom: 14,
           }}
         >
-          <h1 style={{ margin: 0 }}>QR Labels</h1>
+          <h1 className="sr-only" style={{ margin: 0 }}>QR Labels</h1>
 
           <p style={{ marginTop: 8, marginBottom: 6, opacity: 0.9 }}>
             Print this page. Each label opens the box page when scanned.

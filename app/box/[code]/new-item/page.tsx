@@ -120,7 +120,7 @@ export default function NewItemPage() {
             boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
           }}
         >
-          <h1 style={{ marginTop: 6 }}>Add Item</h1>
+          <h1 className="sr-only" style={{ marginTop: 6 }}>Add Item</h1>
           <p style={{ opacity: 0.85, marginTop: 0 }}>
             Adding to <strong>{code}</strong>
           </p>

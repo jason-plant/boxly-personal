@@ -337,7 +337,7 @@ function ScanItemInner() {
 
   return (
     <main style={{ padding: 20, paddingBottom: 110 }}>
-      <h1 style={{ marginTop: 6 }}>Scan Item</h1>
+      <h1 className="sr-only" style={{ marginTop: 6 }}>Scan Item</h1>
       <p style={{ marginTop: 0, opacity: 0.8 }}>
         Pick a box, take a photo, then type a short name and save.
       </p>

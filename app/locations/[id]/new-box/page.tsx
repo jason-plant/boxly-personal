@@ -136,7 +136,7 @@ export default function NewBoxInLocationPage() {
 
   return (
     <main style={{ paddingBottom: 90 }}>
-      <h1 style={{ margin: "6px 0 6px" }}>Add Box</h1>
+      <h1 className="sr-only" style={{ margin: "6px 0 6px" }}>Add Box</h1>
       <p style={{ marginTop: 0, opacity: 0.75 }}>
         Location: <strong>{location?.name ?? "…"}</strong>
       </p>

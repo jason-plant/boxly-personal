@@ -204,7 +204,7 @@ function LocationsInner() {
 
   return (
     <main style={{ paddingBottom: 90 }}>
-      <h1 style={{ marginTop: 6 }}>Locations</h1>
+      <h1 className="sr-only" style={{ marginTop: 6 }}>Locations</h1>
       <p style={{ marginTop: 0, opacity: 0.75 }}>Choose a location to view its boxes.</p>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}

@@ -52,7 +52,7 @@ export default function SignupPage() {
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
         }}
       >
-        <h1 style={{ marginTop: 0 }}>Sign up</h1>
+        <h1 className="sr-only" style={{ marginTop: 0 }}>Sign up</h1>
 
         <form onSubmit={onSignup} style={{ display: "grid", gap: 10 }}>
           <input

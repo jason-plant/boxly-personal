@@ -685,7 +685,7 @@ export default function BoxPage() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div>
-                <h1 style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
+                <h1 className="sr-only" style={{ margin: "0 0 6px 0" }}>{box.code}</h1>
                 {box.name && <div style={{ fontWeight: 800 }}>{box.name}</div>}
                 {box.location && <div style={{ opacity: 0.8 }}>Location: {box.location}</div>}
               </div>

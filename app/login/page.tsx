@@ -48,7 +48,7 @@ export default function LoginPage() {
           boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
         }}
       >
-        <h1 style={{ margin: "0 0 6px 0" }}>Log in</h1>
+        <h1 className="sr-only" style={{ margin: "0 0 6px 0" }}>Log in</h1>
         <div style={{ opacity: 0.75, marginBottom: 14 }}>
           Sign in to your inventory
         </div>

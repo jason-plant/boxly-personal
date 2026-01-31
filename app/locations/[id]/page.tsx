@@ -475,7 +475,7 @@ function LocationInner() {
 
   return (
     <main style={{ paddingBottom: moveMode ? 180 : 90 }}>
-      <h1 style={{ margin: "6px 0 6px" }}>{location.name}</h1>
+      <h1 className="sr-only" style={{ margin: "6px 0 6px" }}>{location.name}</h1>
       <p style={{ marginTop: 0, opacity: 0.75 }}>Boxes in this location</p>
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}

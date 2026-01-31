@@ -73,7 +73,7 @@ function NewLocationInner() {
           maxWidth: 520,
         }}
       >
-        <h1 style={{ marginTop: 6 }}>New Location</h1>
+        <h1 className="sr-only" style={{ marginTop: 6 }}>New Location</h1>
 
         {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
 

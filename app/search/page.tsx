@@ -84,7 +84,7 @@ export default function SearchPage() {
   return (
     <RequireAuth>
       <main style={{ paddingBottom: 90 }}>
-        <h1 style={{ marginTop: 6 }}>Search</h1>
+        <h1 className="sr-only" style={{ marginTop: 6 }}>Search</h1>
 
         <input
           value={query}

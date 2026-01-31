@@ -389,7 +389,7 @@ function BoxesInner() {
 
   return (
     <main style={{ paddingBottom: moveMode ? 180 : 90 }}>
-      <h1 style={{ marginTop: 6 }}>Boxes</h1>
+      <h1 className="sr-only" style={{ marginTop: 6 }}>Boxes</h1>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {loading && <p>Loading boxes…</p>}

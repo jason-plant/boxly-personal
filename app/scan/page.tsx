@@ -135,7 +135,7 @@ function ScanInner() {
 
   return (
     <main style={{ padding: 20 }}>
-      <h1>Scan QR</h1>
+      <h1 className="sr-only">Scan QR</h1>
       <p style={{ marginTop: 0, opacity: 0.8 }}>Point your camera at a box QR code.</p>
 
       {error && <p style={{ color: "crimson", fontWeight: 700 }}>Error: {error}</p>}

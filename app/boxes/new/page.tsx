@@ -247,7 +247,7 @@ function NewBoxInner() {
           maxWidth: 560,
         }}
       >
-        <h1 style={{ marginTop: 6 }}>Create Box</h1>
+        <h1 className="sr-only" style={{ marginTop: 6 }}>Create Box</h1>
         <p style={{ marginTop: 0, opacity: 0.85 }}>
           Enter a name (optional) and pick a location (optional). Code is generated automatically.
         </p>
