@@ -48,6 +48,17 @@ export default function SettingsPage() {
     }
   }
 
+  function resetThemeOverrides() {
+    setCustomText("");
+    setCustomBg("");
+    setCustomSurface("");
+    localStorage.removeItem("customText");
+    localStorage.removeItem("customBg");
+    localStorage.removeItem("customSurface");
+    // re-apply palette/theme
+    applyTheme(theme, palette as any);
+  }
+
   return (
     <RequireAuth>
       <main style={{ padding: 16 }}>
@@ -107,6 +118,10 @@ export default function SettingsPage() {
               <input type="color" value={customSurface || ""} onChange={e => handleCustomChange("surface", e.target.value)} style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid var(--border)" }} />
             </label>
           </div>
+
+          <button onClick={resetThemeOverrides} className="tap-btn" style={{ marginTop: 10, width: 180 }}>
+            Reset to default
+          </button>
 
           {/* Live preview */}
           <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
