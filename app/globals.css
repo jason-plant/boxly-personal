@@ -93,3 +93,9 @@ body {
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+/* Header title transition */
+.ht-layer { transition: transform 220ms cubic-bezier(.2,.9,.3,1), opacity 220ms cubic-bezier(.2,.9,.3,1); }
+.ht-layer.entering { transform: translateY(6px); opacity: 0; }
+.ht-layer.exiting { transform: translateY(-6px); opacity: 0; }
+.ht-layer:not(.entering):not(.exiting) { transform: translateY(0); opacity: 1; }

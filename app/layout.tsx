@@ -26,6 +26,11 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="manifest" href="/site.webmanifest" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-180.png" />
+        <meta name="theme-color" content="#333333" />
+      </head>
       <body
         style={{
           margin: 0,
