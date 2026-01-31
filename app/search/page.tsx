@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EditItemButton } from "./EditItemButton";
+import { DeleteItemButton } from "./DeleteItemButton";
 import { supabase } from "../lib/supabaseClient";
 import RequireAuth from "../components/RequireAuth";
 
@@ -120,6 +122,11 @@ export default function SearchPage() {
             const boxName = i.box?.name ?? null;
             const locationName = i.box?.location?.name ?? null;
 
+            // Handler to remove item from list after delete
+            function handleDeleted() {
+              setItems((prev) => prev.filter((item) => item.id !== i.id));
+            }
+
             return (
               <div
                 key={i.id}
@@ -152,7 +159,7 @@ export default function SearchPage() {
                   </a>
                 )}
 
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, position: "relative" }}>
                   {/* Location */}
                   {locationName && (
                     <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 2, opacity: 0.88 }}>
@@ -166,9 +173,9 @@ export default function SearchPage() {
                   </div>
                   {/* Description */}
                   {i.description && <div style={{ marginTop: 6, opacity: 0.9 }}>{i.description}</div>}
-                  {/* Box number */}
-                  {boxCode && (
-                    <div style={{ marginTop: 10, opacity: 0.9 }}>
+                  {/* Box number, edit, and delete buttons */}
+                  <div style={{ marginTop: 10, opacity: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
+                    {boxCode && (
                       <a
                         href={`/box/${encodeURIComponent(boxCode)}`}
                         style={{
@@ -186,8 +193,10 @@ export default function SearchPage() {
                       >
                         {boxCode}
                       </a>
-                    </div>
-                  )}
+                    )}
+                    <EditItemButton itemId={i.id} boxCode={boxCode} />
+                    <DeleteItemButton itemId={i.id} onDeleted={handleDeleted} />
+                  </div>
                 </div>
               </div>
             );
