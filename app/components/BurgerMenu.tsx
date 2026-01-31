@@ -60,11 +60,12 @@ export default function BurgerMenu() {
   const touchCurrentX = useRef<number | null>(null);
   const touchActive = useRef<boolean>(false);
 
-  // Swipe to open (from left edge)
+  // Swipe to open (from right edge)
   useEffect(() => {
     function onTouchStart(e: TouchEvent) {
       if (open) return;
-      if (e.touches[0].clientX < 24) {
+      const vw = window.innerWidth;
+      if (e.touches[0].clientX > vw - 24) {
         touchStartX.current = e.touches[0].clientX;
         touchCurrentX.current = e.touches[0].clientX;
         touchActive.current = true;
@@ -77,7 +78,7 @@ export default function BurgerMenu() {
     function onTouchEnd() {
       if (!touchActive.current) return;
       const dx = (touchCurrentX.current ?? 0) - (touchStartX.current ?? 0);
-      if (dx > 60) setOpen(true);
+      if (dx < -60) setOpen(true);
       touchActive.current = false;
       touchStartX.current = null;
       touchCurrentX.current = null;
@@ -100,12 +101,14 @@ export default function BurgerMenu() {
     let active = false;
     function onTouchStart(e: TouchEvent) {
       if (!open) return;
-      // Only start if touch is on the right 80px of the menu
+      // Only start if touch is on the left 80px of the menu
       const panel = panelRef.current;
       if (panel && e.touches[0].target instanceof Node && panel.contains(e.touches[0].target)) {
-        startX = e.touches[0].clientX;
-        currentX = e.touches[0].clientX;
-        active = true;
+        if (e.touches[0].clientX < (panel.getBoundingClientRect().left + 80)) {
+          startX = e.touches[0].clientX;
+          currentX = e.touches[0].clientX;
+          active = true;
+        }
       }
     }
     function onTouchMove(e: TouchEvent) {
@@ -115,7 +118,7 @@ export default function BurgerMenu() {
     function onTouchEnd() {
       if (!active) return;
       const dx = (currentX ?? 0) - (startX ?? 0);
-      if (dx < -50) setOpen(false);
+      if (dx > 50) setOpen(false);
       active = false;
       startX = null;
       currentX = null;
