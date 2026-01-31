@@ -125,10 +125,13 @@ export default function HeaderTitle() {
             left: 0,
             top: 0,
             right: 0,
-            whiteSpace: 'normal',
-            wordBreak: 'normal',
-            textAlign: 'center',
             minWidth: 80,
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 1.1,
           }}
         >
           {(() => {
@@ -143,10 +146,12 @@ export default function HeaderTitle() {
             }
             return (
               <>
-                <span style={{ fontWeight: 700, fontSize: 17, display: 'inline' }}>{name}</span>
-                <span style={{ fontWeight: 700, fontSize: 17, display: 'inline' }}>{inventory}</span>
+                <div style={{ display: 'flex', flexWrap: 'nowrap', whiteSpace: 'nowrap', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: 17 }}>{name}</span>
+                  <span style={{ fontWeight: 700, fontSize: 17 }}>{inventory}</span>
+                </div>
                 {section && (
-                  <div style={{ fontWeight: 900, fontSize: 20, marginTop: 0, lineHeight: 1.1 }}>{section}</div>
+                  <div style={{ fontWeight: 900, fontSize: 20, marginTop: 0 }}>{section}</div>
                 )}
               </>
             );
