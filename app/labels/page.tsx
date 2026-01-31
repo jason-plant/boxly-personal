@@ -198,6 +198,117 @@ export default function LabelsPage() {
     }
   }
 
+  async function exportSelectedPDF() {
+    if (selected.length === 0) return;
+    if (typeof window === "undefined") return;
+
+    const { jsPDF } = await import("jspdf");
+    const html2canvas = (await import("html2canvas")).default;
+
+    const finalCount = parseCopies();
+    if (finalCount < 1) return alert("Please enter a quantity of at least 1");
+
+    // determine page size based on layout
+    let pageW = 210; // mm (A4)
+    let pageH = 297;
+    if (printLayout === "40x30") {
+      pageW = 40;
+      pageH = 30;
+    } else if (printLayout === "50x80") {
+      pageW = 50;
+      pageH = 80;
+    }
+
+    const pdf = new jsPDF({ unit: "mm", format: [pageW, pageH] });
+    let first = true;
+
+    for (let i = 0; i < finalCount; i++) {
+      for (const code of selected) {
+        const b = boxes.find((bb) => bb.code === code)!;
+
+        // create offscreen element
+        const el = document.createElement("div");
+        el.style.width = `${pageW}mm`;
+        el.style.height = `${pageH}mm`;
+        el.style.padding = "8px";
+        el.style.boxSizing = "border-box";
+        el.style.border = "1px solid #000";
+        el.innerHTML = `<div style="font-weight:900;font-size:16px;text-align:center;width:100%">${code}</div>${b.name ? `<div style=\"text-align:center;font-size:12px;margin-top:6px\">${b.name}</div>` : ""}${b.location ? `<div style=\"text-align:center;font-size:11px;margin-top:4px\">${b.location}</div>` : ""}<img src=\"${qrMap[code]}\" style=\"width:100%;margin-top:6px\" />`;
+        el.style.position = "absolute";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+
+        // render
+        const canvas = await html2canvas(el, { scale: 2 });
+        const dataUrl = canvas.toDataURL("image/png");
+
+        // add to pdf
+        if (!first) pdf.addPage([pageW, pageH]);
+        first = false;
+        pdf.addImage(dataUrl, "PNG", 0, 0, pageW, pageH);
+
+        document.body.removeChild(el);
+      }
+    }
+
+    pdf.save("labels.pdf");
+  }
+
+  async function bluetoothPrintSelected() {
+    if (selected.length === 0) return;
+    if (typeof navigator === "undefined" || !(navigator as any).bluetooth) {
+      return alert("Bluetooth printing is not supported in this browser.");
+    }
+
+    if (!confirm("Bluetooth printing is experimental. Connect to a BLE label printer that accepts raw image data and proceed?")) return;
+
+    try {
+      // request any device (filtering by name prefix could be added)
+      const device = await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0xFFE0] });
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(0xFFE0);
+      // common writable characteristic for some printers
+      const char = await service.getCharacteristic(0xFFE1);
+
+      // helper to send image data in chunks
+      async function sendImageData(dataUrl: string) {
+        const res = await fetch(dataUrl);
+        const blob = await res.arrayBuffer();
+        const chunkSize = 512;
+        for (let i = 0; i < blob.byteLength; i += chunkSize) {
+          const slice = blob.slice(i, i + chunkSize);
+          await char.writeValue(new Uint8Array(slice));
+        }
+      }
+
+      // send each label image
+      for (const code of selected) {
+        const b = boxes.find((bb) => bb.code === code)!;
+        // render offscreen element to canvas then send
+        const el = document.createElement("div");
+        el.style.width = `80mm`;
+        el.style.padding = "6px";
+        el.style.boxSizing = "border-box";
+        el.style.border = "1px solid #000";
+        el.innerHTML = `<div style="font-weight:900;font-size:16px;text-align:center;width:100%">${code}</div>${b.name ? `<div style=\"text-align:center;font-size:12px;margin-top:6px\">${b.name}</div>` : ""}${b.location ? `<div style=\"text-align:center;font-size:11px;margin-top:4px\">${b.location}</div>` : ""}<img src=\"${qrMap[code]}\" style=\"width:100%;margin-top:6px\" />`;
+        el.style.position = "absolute";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+
+        const html2canvas = (await import("html2canvas")).default;
+        const canvas = await html2canvas(el, { scale: 2 });
+        const dataUrl = canvas.toDataURL("image/png");
+        await sendImageData(dataUrl);
+        document.body.removeChild(el);
+      }
+
+      alert("Sent to printer (experimental). Check your printer to confirm output.");
+    } catch (err: any) {
+      console.error(err);
+      alert("Bluetooth print failed: " + (err?.message || err));
+    }
+  }
+
   return (
     <RequireAuth>
       <main style={{ paddingBottom: 90 }}>
@@ -270,8 +381,10 @@ export default function LabelsPage() {
                   <input type="number" value={copies} onChange={(e) => setCopies(e.target.value)} placeholder="" style={{ width: 80, padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }} />
                 </label>
 
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => printSelected()} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Print selected</button>
+                  <button onClick={() => exportSelectedPDF()} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Export PDF</button>
+                  <button onClick={() => bluetoothPrintSelected()} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Bluetooth print</button>
                   <button onClick={shareSelected} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Share</button>
                   <button onClick={clearSelection} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Clear</button>
                 </div>
