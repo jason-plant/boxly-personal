@@ -261,7 +261,6 @@ export default function LabelsPage() {
   // Export selected labels as PNG images
   async function exportSelectedImages() {
     if (selected.length === 0) return;
-    const html2canvas = (await import("html2canvas")).default;
     const finalCount = parseCopies();
     if (finalCount < 1) return alert("Please enter a quantity of at least 1");
     // 40mm x 30mm at 12px/mm = 480 x 360 px
@@ -270,28 +269,51 @@ export default function LabelsPage() {
     for (let i = 0; i < finalCount; i++) {
       for (const code of selected) {
         const b = boxes.find((bb) => bb.code === code)!;
-        // create offscreen element sized to 480x360px
-        const el = document.createElement("div");
-        el.style.width = pxWidth + "px";
-        el.style.height = pxHeight + "px";
-        el.style.padding = "36px"; // 3mm
-        el.style.boxSizing = "border-box";
-        el.style.border = "1px solid #000";
-        el.style.background = "#fff";
-        el.innerHTML = `<div style="font-weight:900;font-size:96px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="text-align:center;font-size:48px;margin-top:18px">${b.name}</div>` : ""}${b.location ? `<div style="text-align:center;font-size:42px;margin-top:9px">${b.location}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:70%;display:block;margin:18px auto" />`;
-        el.style.position = "absolute";
-        el.style.left = "-9999px";
-        document.body.appendChild(el);
-        const canvas = await html2canvas(el, { scale: 1 });
-        const dataUrl = canvas.toDataURL("image/png");
+        const canvas = document.createElement("canvas");
+        canvas.width = pxWidth;
+        canvas.height = pxHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        // Fill background
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, pxWidth, pxHeight);
+        // Draw border
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(0, 0, pxWidth, pxHeight);
+        // Draw code (top)
+        ctx.font = "bold 64px Arial";
+        ctx.fillStyle = "#000";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(code, pxWidth / 2, 24);
+        // Draw name (middle)
+        if (b.name) {
+          ctx.font = "32px Arial";
+          ctx.fillText(b.name, pxWidth / 2, 110);
+        }
+        // Draw location (below name)
+        if (b.location) {
+          ctx.font = "28px Arial";
+          ctx.fillText(b.location, pxWidth / 2, 150);
+        }
+        // Draw QR code (bottom)
+        const qrImg = new window.Image();
+        qrImg.src = qrMap[code] || "";
+        await new Promise((resolve) => {
+          qrImg.onload = resolve;
+          qrImg.onerror = resolve;
+        });
+        // Draw QR centered, 160px wide
+        ctx.drawImage(qrImg, (pxWidth - 160) / 2, pxHeight - 170, 160, 160);
         // Download the image
+        const dataUrl = canvas.toDataURL("image/png");
         const a = document.createElement("a");
         a.href = dataUrl;
         a.download = `${code}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        document.body.removeChild(el);
       }
     }
   }
