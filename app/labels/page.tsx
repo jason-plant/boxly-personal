@@ -281,31 +281,24 @@ export default function LabelsPage() {
         ctx.strokeStyle = "#000";
         ctx.lineWidth = 4;
         ctx.strokeRect(0, 0, pxWidth, pxHeight);
-        // Draw code (top)
+        // Draw code (move down)
         ctx.font = "bold 64px Arial";
         ctx.fillStyle = "#000";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(code, pxWidth / 2, 24);
-        // Draw name (middle)
-        if (b.name) {
-          ctx.font = "32px Arial";
-          ctx.fillText(b.name, pxWidth / 2, 110);
-        }
-        // Draw location (below name)
-        if (b.location) {
-          ctx.font = "28px Arial";
-          ctx.fillText(b.location, pxWidth / 2, 150);
-        }
-        // Draw QR code (bottom)
+        ctx.fillText(code, pxWidth / 2, 36); // top margin
+        // Draw QR code as large as possible below code
         const qrImg = new window.Image();
         qrImg.src = qrMap[code] || "";
         await new Promise((resolve) => {
           qrImg.onload = resolve;
           qrImg.onerror = resolve;
         });
-        // Draw QR centered, 160px wide
-        ctx.drawImage(qrImg, (pxWidth - 160) / 2, pxHeight - 170, 160, 160);
+        // Calculate available space for QR code
+        const qrTop = 120; // space below code
+        const qrMargin = 24; // margin around QR
+        const qrSize = Math.min(pxWidth, pxHeight - qrTop - qrMargin);
+        ctx.drawImage(qrImg, (pxWidth - qrSize) / 2, qrTop, qrSize, qrSize);
         // Download the image
         const dataUrl = canvas.toDataURL("image/png");
         const a = document.createElement("a");
