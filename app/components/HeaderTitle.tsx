@@ -118,18 +118,38 @@ export default function HeaderTitle() {
           </div>
         )}
 
-        <div className={`ht-layer ${animating ? "entering" : ""}`} style={{ position: "absolute", left: 0, top: 0, right: 0, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'left' }}>
+        <div
+          className={`ht-layer ${animating ? "entering" : ""}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            right: 0,
+            whiteSpace: 'normal',
+            wordBreak: 'normal',
+            textAlign: 'center',
+            minWidth: 80,
+          }}
+        >
           {(() => {
             const [main, section] = meta.title.split('\n');
+            // Split main into name and 'Inventory'
+            let name = main;
+            let inventory = '';
+            const invIdx = main.indexOf("'s Inventory");
+            if (invIdx !== -1) {
+              name = main.slice(0, invIdx);
+              inventory = main.slice(invIdx);
+            }
             return (
-              <span style={{ fontWeight: 700, fontSize: 17, display: 'inline', marginRight: 6 }}>{main}</span>
+              <>
+                <span style={{ fontWeight: 700, fontSize: 17, display: 'inline' }}>{name}</span>
+                <span style={{ fontWeight: 700, fontSize: 17, display: 'inline' }}>{inventory}</span>
+                {section && (
+                  <div style={{ fontWeight: 900, fontSize: 20, marginTop: 0, lineHeight: 1.1 }}>{section}</div>
+                )}
+              </>
             );
-          })()}
-          {(() => {
-            const [_, section] = meta.title.split('\n');
-            return section ? (
-              <span style={{ fontWeight: 900, fontSize: 20, display: 'inline', marginLeft: 6 }}>{section}</span>
-            ) : null;
           })()}
         </div>
       </div>
