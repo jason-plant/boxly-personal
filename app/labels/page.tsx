@@ -223,51 +223,58 @@ export default function LabelsPage() {
             Tip: In print settings, enable “Background graphics” for cleaner QR edges (optional).
           </p>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              style={{
-                background: "#111",
-                color: "#fff",
-                fontWeight: 900,
-                padding: "10px 14px",
-                borderRadius: 14,
-                border: "1px solid #111",
-                cursor: "pointer",
-              }}
-            >
-              Print
-            </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch", position: "relative" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  style={{
+                    background: "#111",
+                    color: "#fff",
+                    fontWeight: 900,
+                    padding: "10px 14px",
+                    borderRadius: 14,
+                    border: "1px solid #111",
+                    cursor: "pointer",
+                  }}
+                >
+                  Print
+                </button>
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                Layout:
-                <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                  <option value="default">Default</option>
-                  <option value="40x30">40 x 30 (mm)</option>
-                  <option value="50x80">50 x 80 (mm)</option>
-                </select>
-              </label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    Layout:
+                    <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                      <option value="default">Default</option>
+                      <option value="40x30">40 x 30 (mm)</option>
+                      <option value="50x80">50 x 80 (mm)</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {showHint && (
+                <div style={{ background: "#111", color: "#fff", padding: "8px 12px", borderRadius: 8, boxShadow: "0 6px 24px rgba(0,0,0,0.16)", fontSize: 13 }}>
+                  Long-press a label to select multiple. <button onClick={dismissHint} style={{ marginLeft: 8, background: "transparent", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Got it</button>
+                </div>
+              )}
             </div>
 
-            {showHint && (
-              <div style={{ position: "absolute", right: 6, top: -6, background: "#111", color: "#fff", padding: "8px 12px", borderRadius: 8, boxShadow: "0 6px 24px rgba(0,0,0,0.16)", fontSize: 13 }}>
-                Long-press a label to select multiple. <button onClick={dismissHint} style={{ marginLeft: 8, background: "transparent", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Got it</button>
-              </div>
-            )}
-
             {selected.length > 0 && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-start", marginTop: 2 }}>
                 <div style={{ fontWeight: 800 }}>{selected.length} selected</div>
+
                 <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   Copies:
-                  <input type="number" value={copies} onChange={(e) => setCopies(e.target.value)} placeholder="1" style={{ width: 80, padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <input type="number" value={copies} onChange={(e) => setCopies(e.target.value)} placeholder="" style={{ width: 80, padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }} />
                 </label>
 
-                <button onClick={() => printSelected()} className="tap-btn">Print selected</button>
-                <button onClick={shareSelected} className="tap-btn">Share</button>
-                <button onClick={clearSelection} className="tap-btn">Clear</button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => printSelected()} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Print selected</button>
+                  <button onClick={shareSelected} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Share</button>
+                  <button onClick={clearSelection} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Clear</button>
+                </div>
               </div>
             )}
           </div>
