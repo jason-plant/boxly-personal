@@ -55,6 +55,81 @@ export default function BurgerMenu() {
 
   const [open, setOpen] = useState(false);
 
+  // Touch gesture state
+  const touchStartX = useRef<number | null>(null);
+  const touchCurrentX = useRef<number | null>(null);
+  const touchActive = useRef<boolean>(false);
+
+  // Swipe to open (from left edge)
+  useEffect(() => {
+    function onTouchStart(e: TouchEvent) {
+      if (open) return;
+      if (e.touches[0].clientX < 24) {
+        touchStartX.current = e.touches[0].clientX;
+        touchCurrentX.current = e.touches[0].clientX;
+        touchActive.current = true;
+      }
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (!touchActive.current) return;
+      touchCurrentX.current = e.touches[0].clientX;
+    }
+    function onTouchEnd() {
+      if (!touchActive.current) return;
+      const dx = (touchCurrentX.current ?? 0) - (touchStartX.current ?? 0);
+      if (dx > 60) setOpen(true);
+      touchActive.current = false;
+      touchStartX.current = null;
+      touchCurrentX.current = null;
+    }
+    window.addEventListener('touchstart', onTouchStart);
+    window.addEventListener('touchmove', onTouchMove);
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [open]);
+
+  // Swipe to close (on menu)
+  useEffect(() => {
+    if (!open) return;
+    let startX: number | null = null;
+    let currentX: number | null = null;
+    let active = false;
+    function onTouchStart(e: TouchEvent) {
+      if (!open) return;
+      // Only start if touch is on the right 80px of the menu
+      const panel = panelRef.current;
+      if (panel && e.touches[0].target instanceof Node && panel.contains(e.touches[0].target)) {
+        startX = e.touches[0].clientX;
+        currentX = e.touches[0].clientX;
+        active = true;
+      }
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (!active) return;
+      currentX = e.touches[0].clientX;
+    }
+    function onTouchEnd() {
+      if (!active) return;
+      const dx = (currentX ?? 0) - (startX ?? 0);
+      if (dx < -50) setOpen(false);
+      active = false;
+      startX = null;
+      currentX = null;
+    }
+    window.addEventListener('touchstart', onTouchStart);
+    window.addEventListener('touchmove', onTouchMove);
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [open]);
+
   // Keep mounted for close animation
   const [mounted, setMounted] = useState(false);
 
