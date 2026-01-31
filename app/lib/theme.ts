@@ -1,38 +1,7 @@
-export type PaletteKey = "ivory" | "stone" | "warm" | "anthracite";
+export type PaletteKey = "ivory" | "stone" | "warm" | "anthracite" | "custom";
 
-export const PALETTES: Record<PaletteKey, { bg: string; surface: string; border: string; text: string; muted: string; accent: string; }> = {
-  ivory: {
-    bg: "#FBFBFA",
-    surface: "#FFFFFF",
-    border: "#EFEDEB",
-    text: "#111827",
-    muted: "#6B7280",
-    accent: "#9AA4A8",
-  },
-  stone: {
-    bg: "#F4F6F7",
-    surface: "#FBFCFD",
-    border: "#DDE2E6",
-    text: "#1F2933",
-    muted: "#6B7280",
-    accent: "#6B8FA3",
-  },
-  warm: {
-    bg: "#F6F4F2",
-    surface: "#FFFFFF",
-    border: "#D6CFC8",
-    text: "#222028",
-    muted: "#6B6661",
-    accent: "#927E6B",
-  },
-  anthracite: {
-    bg: "#ECEFF1",
-    surface: "#FFFFFF",
-    border: "#D6D8DB",
-    text: "#0F1724",
-    muted: "#6B7280",
-    accent: "#33363A",
-  },
+export const PALETTES: Record<Exclude<PaletteKey, 'custom'>, { bg: string; surface: string; border: string; text: string; muted: string; accent: string; }> = {
+// ...existing code...
 };
 
 export function getStoredTheme(): "light" | "dark" {
