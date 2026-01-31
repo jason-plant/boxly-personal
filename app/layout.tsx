@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import React from "react";
+import Image from "next/image";
 import { AuthProvider } from "./lib/auth";
 import BurgerMenu from "./components/BurgerMenu";
 import "./globals.css";
@@ -7,6 +8,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Storage Inventory",
   description: "Box and item inventory system",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export const viewport = {
@@ -92,13 +98,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a
                   href="/locations"
                   style={{
-                    fontWeight: 900,
                     textDecoration: "none",
                     color: "#111",
-                    fontSize: 18,
                   }}
                 >
-                  Storage Inventory
+                  <div style={{display: "flex", alignItems: "center", gap: 8}}>
+                    <Image src="/logo.png" alt="Storage Inventory" width={36} height={36} />
+                    <span style={{fontWeight: 900, fontSize: 18}}>Storage Inventory</span>
+                  </div>
                 </a>
 
                 {/* Burger button stays top-right */}
