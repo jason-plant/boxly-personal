@@ -1392,6 +1392,65 @@ export default function BoxPage() {
           </Modal>
 
 
+          {/* Delete item modal */}
+          <Modal
+            open={confirmDeleteOpen}
+            title="Delete item?"
+            anchor="center"
+            onClose={() => {
+              if (busy) return;
+              setConfirmDeleteOpen(false);
+              deleteItemRef.current = null;
+              deleteReasonRef.current = "button";
+            }}
+          >
+            {deleteReasonRef.current === "qty0" ? (
+              <p style={{ marginTop: 0 }}>
+                Quantity is 0. Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong>?
+              </p>
+            ) : (
+              <p style={{ marginTop: 0 }}>
+                Delete <strong>{deleteItemRef.current?.name ?? "this item"}</strong>?
+              </p>
+            )}
+            <p style={{ marginTop: 0, opacity: 0.85 }}>This will remove the item and any linked photo.</p>
+
+            {error && <p style={{ color: "crimson", marginTop: 0 }}>{error}</p>}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (busy) return;
+                  setConfirmDeleteOpen(false);
+                  deleteItemRef.current = null;
+                  deleteReasonRef.current = "button";
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (busy) return;
+                  const it = deleteItemRef.current;
+                  if (!it) return;
+                  await deleteItemAndPhoto(it);
+                  setConfirmDeleteOpen(false);
+                  deleteItemRef.current = null;
+                  deleteReasonRef.current = "button";
+                }}
+                disabled={busy}
+                style={{ background: "#ef4444", color: "#fff" }}
+              >
+                {busy ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </Modal>
+
+
 
           {/* Print label modal and shareLabelImage function are both inside BoxPage */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
