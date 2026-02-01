@@ -74,7 +74,6 @@ export default function LabelsPage() {
   const [showHint, setShowHint] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showBluetoothConfirm, setShowBluetoothConfirm] = useState(false);
 
   // show first-run long-press hint (persisted in localStorage)
   useEffect(() => {
@@ -369,60 +368,6 @@ export default function LabelsPage() {
     }
   }
 
-  async function bluetoothPrintSelected() {
-    if (selected.length === 0) return;
-    if (typeof navigator === "undefined" || !(navigator as any).bluetooth) {
-      return alert("Bluetooth printing is not supported in this browser.");
-    }
-
-    // confirmation moved to modal UI; caller should open confirmation modal before invoking this function
-
-    try {
-      // request any device (filtering by name prefix could be added)
-      const device = await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0xFFE0] });
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService(0xFFE0);
-      // common writable characteristic for some printers
-      const char = await service.getCharacteristic(0xFFE1);
-
-      // helper to send image data in chunks
-      async function sendImageData(dataUrl: string) {
-        const res = await fetch(dataUrl);
-        const blob = await res.arrayBuffer();
-        const chunkSize = 512;
-        for (let i = 0; i < blob.byteLength; i += chunkSize) {
-          const slice = blob.slice(i, i + chunkSize);
-          await char.writeValue(new Uint8Array(slice));
-        }
-      }
-
-      // send each label image
-      for (const code of selected) {
-        const b = boxes.find((bb) => bb.code === code)!;
-        // render offscreen element to canvas then send
-        const el = document.createElement("div");
-        el.style.width = `80mm`;
-        el.style.padding = "6px";
-        el.style.boxSizing = "border-box";
-        el.style.border = "1px solid #000";
-        el.innerHTML = `<div style="font-weight:900;font-size:26px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="text-align:center;font-size:12px;margin-top:6px">${b.name}</div>` : ""}${b.location ? `<div style="text-align:center;font-size:11px;margin-top:4px">${b.location}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:70%;display:block;margin:6px auto" />`;
-        el.style.position = "absolute";
-        el.style.left = "-9999px";
-        document.body.appendChild(el);
-
-        const html2canvas = (await import("html2canvas")).default;
-        const canvas = await html2canvas(el, { scale: 2 });
-        const dataUrl = canvas.toDataURL("image/png");
-        await sendImageData(dataUrl);
-        document.body.removeChild(el);
-      }
-
-      alert("Sent to printer (experimental). Check your printer to confirm output.");
-    } catch (err: any) {
-      console.error(err);
-      alert("Bluetooth print failed: " + (err?.message || err));
-    }
-  }
 
   return (
     <RequireAuth>
@@ -490,10 +435,6 @@ export default function LabelsPage() {
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => setShowPrintModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Print selected</button>
-                  <button onClick={() => exportSelectedPDF()} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Export PDF</button>
-                  <button onClick={exportSelectedImages} style={{ padding: "8px 10px", borderRadius: 10, background: "#111", color: "#fff", fontWeight: 900 }}>Export Image</button>
-                  <button onClick={() => setShowPrintModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Bluetooth print</button>
-                  <button onClick={() => setShowShareModal(true)} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Share</button>
                   <button onClick={clearSelection} style={{ padding: "8px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb", fontWeight: 800 }}>Clear</button>
                 </div>
               </div>
@@ -590,7 +531,7 @@ export default function LabelsPage() {
 
         {/* Modals */}
         {/* Print / Bluetooth modal */}
-        <Modal open={showPrintModal} title="Print labels" onClose={() => setShowPrintModal(false)}>
+        <Modal open={showPrintModal} title="Print selected" onClose={() => setShowPrintModal(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -627,15 +568,12 @@ export default function LabelsPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => { setShowPrintModal(false); printSelected(); }} className="tap-btn">Print (system)</button>
-              <button onClick={() => { setShowPrintModal(false); exportSelectedPDF(); }} className="tap-btn primary">Export PDF</button>
-              <button onClick={() => { setShowPrintModal(false); setShowBluetoothConfirm(true); }} className="tap-btn">Bluetooth print</button>
+              <button onClick={() => { setShowPrintModal(false); exportSelectedPDF(); }} className="tap-btn">Export PDF</button>
+              <button onClick={() => { setShowPrintModal(false); exportSelectedImages(); }} className="tap-btn">Export image</button>
+              <button onClick={() => { setShowPrintModal(false); setShowShareModal(true); }} className="tap-btn">Share</button>
               <button onClick={() => setShowPrintModal(false)} className="tap-btn">Cancel</button>
-            </div>
-
-            <div style={{ fontSize: 13, opacity: 0.85 }}>
-              You can print directly to a connected printer via the system dialog, export a PDF, or use experimental Bluetooth printing. Bluetooth support varies by device.
             </div>
           </div>
         </Modal>
@@ -654,18 +592,6 @@ export default function LabelsPage() {
           </div>
         </Modal>
 
-        {/* Bluetooth confirm modal */}
-        <Modal open={showBluetoothConfirm} title="Bluetooth printing" onClose={() => setShowBluetoothConfirm(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 14 }}>
-              Bluetooth printing is experimental. Connect to a BLE label printer that accepts raw image data and proceed?
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={async () => { setShowBluetoothConfirm(false); await bluetoothPrintSelected(); }} className="tap-btn primary">Proceed</button>
-              <button onClick={() => setShowBluetoothConfirm(false)} className="tap-btn">Cancel</button>
-            </div>
-          </div>
-        </Modal>
       </main>
     </RequireAuth>
   );
