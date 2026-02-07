@@ -413,7 +413,7 @@ export default function BoxPage() {
       const maxImageBytes = maxImageMB * 1024 * 1024;
       let fileToUpload = editNewPhoto;
       try {
-        const { compressImage } = await import("../../lib/image");
+        const { compressImage } = await import("../../../lib/image");
         const compressed = await compressImage(editNewPhoto, { maxSize: 1280, quality: 0.8, maxSizeMB: maxImageMB });
         fileToUpload = compressed.size < editNewPhoto.size ? compressed : editNewPhoto;
       } catch (e: any) {
