@@ -233,7 +233,7 @@ export default function SearchPage() {
                                 let fileToUpload = updated.photoFile;
 
                                 try {
-                                  const { compressImage } = await import("../lib/image");
+                                  const { compressImage } = await import("../../lib/image");
                                   const compressed = await compressImage(updated.photoFile, { maxSize: 1280, quality: 0.8, maxSizeMB: maxImageMB });
                                   fileToUpload = compressed.size < updated.photoFile.size ? compressed : updated.photoFile;
                                 } catch (e: any) {
