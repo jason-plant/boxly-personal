@@ -27,6 +27,14 @@ function dataURLToBlob(dataUrl: string) {
   return new Blob([arr], { type: mime });
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes)) return "";
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 2 : 1)} MB`;
+}
+
 export default function ScanItemPage() {
   return (
     <RequireAuth>
@@ -55,6 +63,7 @@ function ScanItemInner() {
   );
 
   const [error, setError] = useState<string | null>(null);
+  const [compressInfo, setCompressInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Image state
@@ -141,6 +150,7 @@ function ScanItemInner() {
   function resetAfterNewPhoto() {
     // keep box selection, but reset item bits
     setError(null);
+    setCompressInfo(null);
     setName("");
     setDesc("");
     setQty(1);
@@ -213,6 +223,7 @@ function ScanItemInner() {
 
     setBusy(true);
     setError(null);
+    setCompressInfo(null);
 
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     const userId = authData.user?.id;
@@ -261,9 +272,11 @@ function ScanItemInner() {
 
       // Use compressed image only if it gives a size reduction
       fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
+      setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
     } catch (e: any) {
       // If compression fails, fall back to uploading the original file
       fileToUpload = capturedFile;
+      setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
     }
 
     if (fileToUpload.size > maxImageBytes) {
@@ -340,6 +353,7 @@ function ScanItemInner() {
       </p>
 
       {error && <p style={{ color: "crimson", fontWeight: 700 }}>Error: {error}</p>}
+      {compressInfo && <p style={{ color: "#166534", fontWeight: 700 }}>{compressInfo}</p>}
 
       <div
         style={{

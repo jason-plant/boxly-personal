@@ -51,6 +51,14 @@ function getStoragePathFromPublicUrl(url: string) {
   return url.substring(idx + marker.length);
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes)) return "";
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 2 : 1)} MB`;
+}
+
 export default function BoxPage() {
 
 
@@ -72,6 +80,7 @@ export default function BoxPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compressInfo, setCompressInfo] = useState<string | null>(null);
 
   const [box, setBox] = useState<BoxRow | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
@@ -260,6 +269,7 @@ export default function BoxPage() {
   async function deleteItemAndPhoto(item: ItemRow) {
     setBusy(true);
     setError(null);
+    setCompressInfo(null);
 
     // delete photo (best effort)
     if (item.photo_url) {
@@ -338,6 +348,7 @@ export default function BoxPage() {
 
   function openEditItem(i: ItemRow) {
     setError(null);
+    setCompressInfo(null);
     editItemRef.current = i;
     setEditName(i.name ?? "");
     setEditDesc(i.description ?? "");
@@ -416,8 +427,10 @@ export default function BoxPage() {
         const { compressImage } = await import("../../../lib/image");
         const compressed = await compressImage(editNewPhoto, { maxSize: 1280, quality: 0.5, maxSizeMB: 0.1, aggressive: true });
         fileToUpload = compressed.size < editNewPhoto.size ? compressed : editNewPhoto;
+        setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
       } catch (e: any) {
         fileToUpload = editNewPhoto;
+        setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
       }
 
       if (fileToUpload.size > maxImageBytes) {
@@ -1257,6 +1270,7 @@ export default function BoxPage() {
             onClose={() => {
               if (busy) return;
               setEditItemOpen(false);
+              setCompressInfo(null);
               editItemRef.current = null;
               setEditNewPhoto(null);
               setEditRemovePhoto(false);
@@ -1269,6 +1283,7 @@ export default function BoxPage() {
             </p>
 
             {error && <p style={{ color: "crimson", margin: 0 }}>Error: {error}</p>}
+            {compressInfo && <p style={{ color: "#166534", margin: 0 }}>{compressInfo}</p>}
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 800 }}>Name</span>

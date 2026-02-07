@@ -21,11 +21,20 @@ type SearchItem = {
   } | null;
 };
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes)) return "";
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 2 : 1)} MB`;
+}
+
 export default function SearchPage() {
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compressInfo, setCompressInfo] = useState<string | null>(null);
   const [items, setItems] = useState<SearchItem[]>([]);
 
   // Edit modal state
@@ -119,6 +128,7 @@ export default function SearchPage() {
 
         {loading && <p>Searching…</p>}
         {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+        {compressInfo && <p style={{ color: "#166534" }}>{compressInfo}</p>}
 
         {!loading && query && items.length === 0 && !error && <p>No items found.</p>}
 
@@ -203,6 +213,7 @@ export default function SearchPage() {
                     <EditIconButton
                       onClick={() => {
                         setEditItem(i);
+                        setCompressInfo(null);
                         setEditModalOpen(true);
                       }}
                       title="Edit item"
@@ -210,10 +221,14 @@ export default function SearchPage() {
                           <EditItemModal
                             open={editModalOpen}
                             item={editItem}
-                            onClose={() => setEditModalOpen(false)}
+                            onClose={() => {
+                              setEditModalOpen(false);
+                              setCompressInfo(null);
+                            }}
                             onSave={async (updated) => {
                               setLoading(true);
                               setError(null);
+                              setCompressInfo(null);
                               let photo_url = updated.photo_url;
                               const userId = (await supabase.auth.getUser()).data.user?.id;
                               // Remove old photo if new one is uploaded and there was an old photo
@@ -236,8 +251,10 @@ export default function SearchPage() {
                                   const { compressImage } = await import("../../lib/image");
                                   const compressed = await compressImage(updated.photoFile, { maxSize: 1280, quality: 0.5, maxSizeMB: 0.1, aggressive: true });
                                   fileToUpload = compressed.size < updated.photoFile.size ? compressed : updated.photoFile;
+                                  setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
                                 } catch (e: any) {
                                   fileToUpload = updated.photoFile;
+                                  setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
                                 }
 
                                 if (fileToUpload.size > maxImageBytes) {
