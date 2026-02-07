@@ -24,6 +24,7 @@ export type CompressOptions = {
   quality?: number; // 0-1 (default 0.8)
   mimeType?: string | null; // override mime type (if null, auto-detect)
   maxSizeMB?: number | null; // optional: max target size in MB (browser-image-compression uses this)
+  aggressive?: boolean; // apply smaller dimensions and lower quality for tighter compression
 };
 
 export async function compressImage(file: File, opts: CompressOptions = {}): Promise<File> {
@@ -31,15 +32,18 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
     throw new Error("compressImage must be called in the browser");
   }
 
-  const { maxSize = 1280, quality = 0.8, maxSizeMB = null } = opts;
+  const { maxSize = 1280, quality = 0.8, maxSizeMB = null, aggressive = false } = opts;
   const maxBytes = maxSizeMB ? maxSizeMB * 1024 * 1024 : null;
 
   const useWebP = opts.mimeType ? opts.mimeType === "image/webp" : await supportsWebP();
   const fileType = opts.mimeType || (useWebP ? "image/webp" : file.type || "image/jpeg");
 
+  const baseMaxSize = aggressive ? Math.min(maxSize, 1024) : maxSize;
+  const baseQuality = aggressive ? Math.max(0.45, quality - 0.3) : quality;
+
   const options = {
-    maxWidthOrHeight: maxSize,
-    initialQuality: quality,
+    maxWidthOrHeight: baseMaxSize,
+    initialQuality: baseQuality,
     fileType,
     useWebWorker: true,
     ...(maxSizeMB ? { maxSizeMB } : {}),
@@ -53,10 +57,17 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
 
   if (maxBytes && compressed.size > maxBytes) {
     const attempts = [
-      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.9)), initialQuality: Math.max(0.7, quality - 0.1) },
-      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.8)), initialQuality: Math.max(0.6, quality - 0.2) },
-      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.7)), initialQuality: Math.max(0.5, quality - 0.3) },
+      { maxWidthOrHeight: Math.max(640, Math.round(baseMaxSize * 0.9)), initialQuality: Math.max(0.55, baseQuality - 0.1) },
+      { maxWidthOrHeight: Math.max(640, Math.round(baseMaxSize * 0.8)), initialQuality: Math.max(0.45, baseQuality - 0.2) },
+      { maxWidthOrHeight: Math.max(640, Math.round(baseMaxSize * 0.7)), initialQuality: Math.max(0.35, baseQuality - 0.3) },
     ];
+
+    if (aggressive) {
+      attempts.push(
+        { maxWidthOrHeight: Math.max(512, Math.round(baseMaxSize * 0.6)), initialQuality: Math.max(0.3, baseQuality - 0.4) },
+        { maxWidthOrHeight: Math.max(480, Math.round(baseMaxSize * 0.5)), initialQuality: Math.max(0.25, baseQuality - 0.5) },
+      );
+    }
 
     let best = compressed;
     for (const attempt of attempts) {
