@@ -32,6 +32,7 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   }
 
   const { maxSize = 1280, quality = 0.8, maxSizeMB = null } = opts;
+  const maxBytes = maxSizeMB ? maxSizeMB * 1024 * 1024 : null;
 
   const useWebP = opts.mimeType ? opts.mimeType === "image/webp" : await supportsWebP();
   const fileType = opts.mimeType || (useWebP ? "image/webp" : file.type || "image/jpeg");
@@ -48,7 +49,29 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   const { default: imageCompression } = await import("browser-image-compression");
 
   // browser-image-compression handles EXIF orientation and returns a File/Blob
-  const compressed: Blob = await imageCompression(file, options as any);
+  let compressed: Blob = await imageCompression(file, options as any);
+
+  if (maxBytes && compressed.size > maxBytes) {
+    const attempts = [
+      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.9)), initialQuality: Math.max(0.7, quality - 0.1) },
+      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.8)), initialQuality: Math.max(0.6, quality - 0.2) },
+      { maxWidthOrHeight: Math.max(640, Math.round(maxSize * 0.7)), initialQuality: Math.max(0.5, quality - 0.3) },
+    ];
+
+    let best = compressed;
+    for (const attempt of attempts) {
+      const next = await imageCompression(file, { ...options, ...attempt } as any);
+      if (next.size < best.size) best = next;
+      if (next.size <= maxBytes) {
+        compressed = next;
+        break;
+      }
+    }
+
+    if (best.size < compressed.size) {
+      compressed = best;
+    }
+  }
 
   // If the library returned a File, return it directly
   if (compressed instanceof File) return compressed;
