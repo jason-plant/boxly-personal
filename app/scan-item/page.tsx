@@ -251,45 +251,42 @@ function ScanItemInner() {
 
     // Compress the photo client-side to save Supabase storage
     let uploadRes: any = null;
+    const maxImageMB = 1;
+    const maxImageBytes = maxImageMB * 1024 * 1024;
+    let fileToUpload = capturedFile;
 
     try {
       const { compressImage } = await import("../../lib/image");
-      const compressed = await compressImage(capturedFile, { maxSize: 1280, quality: 0.8 });
+      const compressed = await compressImage(capturedFile, { maxSize: 1280, quality: 0.8, maxSizeMB: maxImageMB });
 
       // Use compressed image only if it gives a size reduction
-      const fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
-
-      uploadRes = await supabase.storage
-        .from("item-photos")
-        .upload(path, fileToUpload, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: fileToUpload.type || "image/jpeg",
-        });
-
-      if (uploadRes.error) {
-        // rollback item if upload fails (best effort)
-        await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
-        setError(uploadRes.error.message);
-        setBusy(false);
-        return;
-      }
+      fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
     } catch (e: any) {
       // If compression fails, fall back to uploading the original file
-      uploadRes = await supabase.storage
-        .from("item-photos")
-        .upload(path, capturedFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: capturedFile.type || "image/jpeg",
-        });
+      fileToUpload = capturedFile;
+    }
 
-      if (uploadRes.error) {
-        await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
-        setError(uploadRes.error.message);
-        setBusy(false);
-        return;
-      }
+    if (fileToUpload.size > maxImageBytes) {
+      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+      setError("Image must be 1 MB or smaller.");
+      setBusy(false);
+      return;
+    }
+
+    uploadRes = await supabase.storage
+      .from("item-photos")
+      .upload(path, fileToUpload, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: fileToUpload.type || "image/jpeg",
+      });
+
+    if (uploadRes.error) {
+      // rollback item if upload fails (best effort)
+      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+      setError(uploadRes.error.message);
+      setBusy(false);
+      return;
     }
 
     if (uploadRes?.error) {

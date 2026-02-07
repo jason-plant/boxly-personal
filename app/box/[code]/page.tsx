@@ -409,13 +409,30 @@ export default function BoxPage() {
         }
       }
 
+      const maxImageMB = 1;
+      const maxImageBytes = maxImageMB * 1024 * 1024;
+      let fileToUpload = editNewPhoto;
+      try {
+        const { compressImage } = await import("../../lib/image");
+        const compressed = await compressImage(editNewPhoto, { maxSize: 1280, quality: 0.8, maxSizeMB: maxImageMB });
+        fileToUpload = compressed.size < editNewPhoto.size ? compressed : editNewPhoto;
+      } catch (e: any) {
+        fileToUpload = editNewPhoto;
+      }
+
+      if (fileToUpload.size > maxImageBytes) {
+        setError("Image must be 1 MB or smaller.");
+        setBusy(false);
+        return;
+      }
+
       const safeName = editNewPhoto.name.replace(/[^\w.\-]+/g, "_");
       const path = `${userId}/${it.id}/${Date.now()}-${safeName}`;
 
-      const uploadRes = await supabase.storage.from("item-photos").upload(path, editNewPhoto, {
+      const uploadRes = await supabase.storage.from("item-photos").upload(path, fileToUpload, {
         cacheControl: "3600",
         upsert: false,
-        contentType: editNewPhoto.type || "image/jpeg",
+        contentType: fileToUpload.type || "image/jpeg",
       });
 
       if (uploadRes.error) {

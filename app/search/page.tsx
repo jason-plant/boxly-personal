@@ -228,12 +228,30 @@ export default function SearchPage() {
                               }
                               // Upload new photo if present
                               if (updated.photoFile && userId) {
+                                const maxImageMB = 1;
+                                const maxImageBytes = maxImageMB * 1024 * 1024;
+                                let fileToUpload = updated.photoFile;
+
+                                try {
+                                  const { compressImage } = await import("../lib/image");
+                                  const compressed = await compressImage(updated.photoFile, { maxSize: 1280, quality: 0.8, maxSizeMB: maxImageMB });
+                                  fileToUpload = compressed.size < updated.photoFile.size ? compressed : updated.photoFile;
+                                } catch (e: any) {
+                                  fileToUpload = updated.photoFile;
+                                }
+
+                                if (fileToUpload.size > maxImageBytes) {
+                                  setError("Image must be 1 MB or smaller.");
+                                  setLoading(false);
+                                  return;
+                                }
+
                                 const safeName = updated.photoFile.name.replace(/[^\w.\-]+/g, "_");
                                 const path = `${userId}/${updated.id}/${Date.now()}-${safeName}`;
-                                const uploadRes = await supabase.storage.from("item-photos").upload(path, updated.photoFile, {
+                                const uploadRes = await supabase.storage.from("item-photos").upload(path, fileToUpload, {
                                   cacheControl: "3600",
                                   upsert: false,
-                                  contentType: updated.photoFile.type || "image/jpeg",
+                                  contentType: fileToUpload.type || "image/jpeg",
                                 });
                                 if (!uploadRes.error) {
                                   const pub = supabase.storage.from("item-photos").getPublicUrl(path);
