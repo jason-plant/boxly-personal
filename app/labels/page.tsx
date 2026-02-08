@@ -70,7 +70,7 @@ export default function LabelsPage() {
   const longPressTimers = useRef<Record<string, number>>({});
   const longPressFired = useRef<Record<string, boolean>>({});
   const [copies, setCopies] = useState<string>("1");
-  const [printLayout, setPrintLayout] = useState<string>("30x40");
+  const [printLayout, setPrintLayout] = useState<string>("50x80");
   const [showHint, setShowHint] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -145,22 +145,22 @@ export default function LabelsPage() {
       return;
     }
 
-    // determine label CSS based on layout (portrait labels)
-    let labelStyle = "width:30mm;height:40mm;";
-    if (printLayout === "40x50") {
-      labelStyle = "width:40mm;height:50mm;";
+    // determine label CSS based on layout
+    let labelStyle = "width:50mm;height:80mm;";
+    if (printLayout === "40x30") {
+      labelStyle = "width:40mm;height:30mm;";
     }
-    const labelClass = printLayout === "40x50" ? "label layout-40x50" : "label layout-30x40";
+    const labelClass = printLayout === "40x30" ? "label layout-40x30" : "label layout-50x80";
 
     for (let i = 0; i < finalCount; i++) {
       for (const code of selected) {
         const b = boxes.find((bb) => bb.code === code)!;
         const img = qrMap[code] || "";
-        itemsHtml.push(`<div class="${labelClass}" style="${labelStyle}"><div class="code">${code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}<img src="${img}" /></div>`);
+        itemsHtml.push(`<div class="${labelClass}" style="${labelStyle}"><div class="inner"><div class="code">${code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}<img src="${img}" /></div></div>`);
       }
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:6px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden} .label img{width:72%;height:auto;display:block;margin:6px auto 0} .label .code{font-weight:900;font-size:24px;text-align:center;width:100%} .label .name{text-align:center;font-size:12px;margin-top:4px}.layout-40x50 .code{font-size:30px}.layout-40x50 .name{font-size:13px}.layout-40x50 img{width:74%}.no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:4px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden;position:relative} .label .inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start} .label img{width:46mm;height:46mm;display:block;margin:10mm auto 0} .label .code,.label .name{font-weight:900;font-size:28px;text-align:center;width:100%} .layout-40x30 .inner{width:18mm;height:28mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)} .layout-40x30 img{width:16mm;height:16mm;margin:4px auto 0} .layout-50x80 .code,.layout-50x80 .name{font-size:28px} .no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
 
     win.document.open();
     win.document.write(html);
@@ -175,11 +175,11 @@ export default function LabelsPage() {
       const files: File[] = [];
       const html2canvas = (await import("html2canvas")).default;
 
-      let pxWidth = 360;
-      let pxHeight = 480;
-      if (printLayout === "40x50") {
+      let pxWidth = 600;
+      let pxHeight = 960;
+      if (printLayout === "40x30") {
         pxWidth = 480;
-        pxHeight = 600;
+        pxHeight = 360;
       }
 
       for (const code of selected) {
@@ -196,15 +196,22 @@ export default function LabelsPage() {
         el.style.background = "#fff";
         el.style.fontFamily = "Arial, sans-serif";
 
-        const codeSize = printLayout === "40x50" ? 44 : 32;
-        const nameSize = printLayout === "40x50" ? 16 : 12;
-        const qrWidth = printLayout === "40x50" ? "72%" : "68%";
-        const qrMarginTop = printLayout === "40x50" ? "8px" : "6px";
+        const isLarge = printLayout === "50x80";
+        const codeSize = isLarge ? 28 : 24;
+        const qrWidth = isLarge ? "92%" : "70%";
+        const innerStyle = printLayout === "40x30"
+          ? "width:216px;height:336px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+          : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
+        const qrMargin = isLarge ? "120px" : "6px";
 
         el.innerHTML = `
-          <div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>
-          ${b.name ? `<div style=\"text-align:center;font-size:${nameSize}px;margin-top:6px\">${b.name}</div>` : ""}
-          <img src="${qr}" style="width:${qrWidth};display:block;margin:${qrMarginTop} auto 0" />
+          <div style="position:relative;width:100%;height:100%">
+            <div style="${innerStyle}">
+              <div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>
+              ${b.name ? `<div style=\"font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px\">${b.name}</div>` : ""}
+              <img src="${qr}" style="width:${qrWidth};display:block;margin:${qrMargin} auto 0" />
+            </div>
+          </div>
         `;
 
         el.style.position = "absolute";
@@ -252,12 +259,12 @@ export default function LabelsPage() {
     // determine page size based on layout
     let pageW = 210; // mm (A4)
     let pageH = 297;
-    if (printLayout === "30x40") {
-      pageW = 30;
-      pageH = 40;
-    } else if (printLayout === "40x50") {
+    if (printLayout === "40x30") {
       pageW = 40;
-      pageH = 50;
+      pageH = 30;
+    } else if (printLayout === "50x80") {
+      pageW = 50;
+      pageH = 80;
     }
 
     const pdf = new jsPDF({ unit: "mm", format: [pageW, pageH] });
@@ -274,10 +281,14 @@ export default function LabelsPage() {
         el.style.padding = "8px";
         el.style.boxSizing = "border-box";
         el.style.border = "1px solid #000";
-        const codeSize = printLayout === "40x50" ? 30 : 24;
-        const nameSize = printLayout === "40x50" ? 13 : 11;
-        const qrWidth = printLayout === "40x50" ? "74%" : "70%";
-        el.innerHTML = `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="text-align:center;font-size:${nameSize}px;margin-top:6px">${b.name}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:${qrWidth};display:block;margin:6px auto" />`;
+        const codeSize = printLayout === "50x80" ? 28 : 24;
+        const qrWidth = printLayout === "50x80" ? "46mm" : "16mm";
+        const qrHeight = printLayout === "50x80" ? "46mm" : "16mm";
+        const innerStyle = printLayout === "40x30"
+          ? "width:18mm;height:28mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+          : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
+        const qrMargin = printLayout === "50x80" ? "10mm" : "6px";
+        el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${b.name}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:${qrWidth};height:${qrHeight};display:block;margin:${qrMargin} auto 0" /></div></div>`;
         el.style.position = "absolute";
         el.style.left = "-9999px";
         document.body.appendChild(el);
@@ -303,11 +314,11 @@ export default function LabelsPage() {
     if (selected.length === 0) return;
     const finalCount = parseCopies();
     if (finalCount < 1) return alert("Please enter a quantity of at least 1");
-    // Layouts: 30x40mm (360x480px), 40x50mm (480x600px)
-    let pxWidth = 360, pxHeight = 480;
-    if (printLayout === "40x50") {
+    // Layouts: 50x80mm (600x960px), 40x30mm (480x360px)
+    let pxWidth = 600, pxHeight = 960;
+    if (printLayout === "40x30") {
       pxWidth = 480;
-      pxHeight = 600;
+      pxHeight = 360;
     }
     for (let i = 0; i < finalCount; i++) {
       for (const code of selected) {
@@ -325,39 +336,55 @@ export default function LabelsPage() {
         ctx.lineWidth = 4;
         ctx.strokeRect(0, 0, pxWidth, pxHeight);
         // Draw code (move down, size based on label)
-        let codeFont = "bold 48px Arial";
-        let codeY = 28;
-        let nameFont = "bold 18px Arial";
-        let nameY = 92;
-        let qrTop = 130;
-        let qrMargin = 24;
-        if (printLayout === "40x50") {
-          codeFont = "bold 64px Arial";
-          codeY = 34;
-          nameFont = "bold 20px Arial";
-          nameY = 112;
-          qrTop = 160;
-          qrMargin = 28;
-        }
-        ctx.font = codeFont;
+        const isLarge = printLayout === "50x80";
+        const codeSize = isLarge ? 80 : 44;
+        const nameSize = codeSize;
+        const qrSize = isLarge ? Math.round(pxWidth * 0.92) : 192;
+
         ctx.fillStyle = "#000";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(code, pxWidth / 2, codeY);
-        if (b.name) {
-          ctx.font = nameFont;
-          ctx.fillText(b.name, pxWidth / 2, nameY);
+
+        if (printLayout === "40x30") {
+          ctx.save();
+          ctx.translate(pxWidth / 2, pxHeight / 2);
+          ctx.rotate(Math.PI / 2);
+          ctx.translate(-pxHeight / 2, -pxWidth / 2);
+          const innerW = pxHeight;
+          const insetY = 72;
+          ctx.font = `900 ${codeSize}px Arial`;
+          ctx.fillText(code, innerW / 2, 28 + insetY);
+          if (b.name) {
+            ctx.font = `900 ${nameSize}px Arial`;
+            ctx.fillText(b.name, innerW / 2, 28 + insetY + codeSize + 8);
+          }
+          const qrImg = new window.Image();
+          qrImg.src = qrMap[code] || "";
+          await new Promise((resolve) => {
+            qrImg.onload = resolve;
+            qrImg.onerror = resolve;
+          });
+          const qrX = (innerW - qrSize) / 2;
+          const qrY = 28 + insetY + codeSize + 8 + nameSize + 10;
+          ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+          ctx.restore();
+        } else {
+          ctx.font = `900 ${codeSize}px Arial`;
+          ctx.fillText(code, pxWidth / 2, 28);
+          if (b.name) {
+            ctx.font = `900 ${nameSize}px Arial`;
+            ctx.fillText(b.name, pxWidth / 2, 28 + codeSize + 8);
+          }
+          const qrImg = new window.Image();
+          qrImg.src = qrMap[code] || "";
+          await new Promise((resolve) => {
+            qrImg.onload = resolve;
+            qrImg.onerror = resolve;
+          });
+          const qrX = (pxWidth - qrSize) / 2;
+          const qrY = 28 + codeSize + 8 + nameSize + 10 + (isLarge ? 120 : 0);
+          ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
         }
-        // Draw QR code as large as possible below code
-        const qrImg = new window.Image();
-        qrImg.src = qrMap[code] || "";
-        await new Promise((resolve) => {
-          qrImg.onload = resolve;
-          qrImg.onerror = resolve;
-        });
-        // Calculate available space for QR code
-        const qrSize = Math.min(pxWidth - qrMargin * 2, pxHeight - qrTop - qrMargin);
-        ctx.drawImage(qrImg, (pxWidth - qrSize) / 2, qrTop, qrSize, qrSize);
         // Download the image
         const dataUrl = canvas.toDataURL("image/png");
         const a = document.createElement("a");
@@ -411,8 +438,8 @@ export default function LabelsPage() {
                   <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     Layout:
                     <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                      <option value="30x40">30 x 40 (mm)</option>
-                      <option value="40x50">40 x 50 (mm)</option>
+                      <option value="50x80">50 x 80 (mm)</option>
+                      <option value="40x30">40 x 30 (mm)</option>
                     </select>
                   </label>
                 </div>
@@ -543,29 +570,66 @@ export default function LabelsPage() {
               <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 Layout:
                 <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                  <option value="30x40">30 x 40 (mm)</option>
-                  <option value="40x50">40 x 50 (mm)</option>
+                  <option value="50x80">50 x 80 (mm)</option>
+                  <option value="40x30">40 x 30 (mm)</option>
                 </select>
               </label>
             </div>
 
             {/* Preview */}
             <div style={{ display: "flex", justifyContent: "center" }}>
-              <div style={{ width: 160, border: "1px solid #000", padding: 8, borderRadius: 8, textAlign: "center" }}>
-                <div style={{ fontWeight: 900, fontSize: 26 }}>{selected.length > 0 ? selected[0] : (boxes[0]?.code ?? "BOX-CODE")}</div>
-                <div style={{ marginTop: 6 }}>
-                  {selected.length > 0 && qrMap[selected[0]] ? (
-                    <img src={qrMap[selected[0]]} alt="preview" style={{ width: "70%", display: "block", margin: "6px auto" }} />
-                  ) : boxes[0] && qrMap[boxes[0].code] ? (
-                    <img src={qrMap[boxes[0].code]} alt="preview" style={{ width: "70%", display: "block", margin: "6px auto" }} />
-                  ) : (
-                    <div style={{ width: "70%", height: 80, background: "#f0f0f0", margin: "6px auto" }} />
-                  )}
-                </div>
-                {selected.length > 0 && (boxes.find((b) => b.code === selected[0])?.name) && (
-                  <div style={{ fontSize: 12 }}>{boxes.find((b) => b.code === selected[0])?.name}</div>
-                )}
-              </div>
+              {(() => {
+                const isLarge = printLayout === "50x80";
+                const previewW = isLarge ? 200 : 160;
+                const previewH = isLarge ? 320 : 120;
+                const codeSize = isLarge ? 22 : 16;
+                const qrSize = isLarge ? 120 : 56;
+                const qrMarginTop = isLarge ? 40 : 6;
+                const innerStyle: React.CSSProperties = isLarge
+                  ? { width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center" }
+                  : {
+                      width: 72,
+                      height: 112,
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: "translate(-50%, -50%) rotate(90deg)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    };
+
+                const previewCode = selected.length > 0 ? selected[0] : (boxes[0]?.code ?? "BOX-CODE");
+                const previewName = selected.length > 0 ? boxes.find((b) => b.code === selected[0])?.name : boxes[0]?.name;
+                const previewQr = selected.length > 0 ? qrMap[selected[0]] : (boxes[0] ? qrMap[boxes[0].code] : "");
+
+                return (
+                  <div
+                    style={{
+                      width: previewW,
+                      height: previewH,
+                      border: "1px solid #000",
+                      padding: 6,
+                      borderRadius: 8,
+                      position: "relative",
+                      background: "#fff",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div style={innerStyle}>
+                      <div style={{ fontWeight: 900, fontSize: codeSize, textAlign: "center", width: "100%" }}>{previewCode}</div>
+                      {previewName && (
+                        <div style={{ fontWeight: 900, fontSize: codeSize, textAlign: "center", width: "100%", marginTop: 4 }}>{previewName}</div>
+                      )}
+                      {previewQr ? (
+                        <img src={previewQr} alt="preview" style={{ width: qrSize, height: qrSize, marginTop: qrMarginTop }} />
+                      ) : (
+                        <div style={{ width: qrSize, height: qrSize, background: "#f0f0f0", marginTop: qrMarginTop }} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
