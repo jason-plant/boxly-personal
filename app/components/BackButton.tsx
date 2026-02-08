@@ -1,20 +1,31 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useUnsavedChanges } from "./UnsavedChangesProvider";
 import Modal from "./Modal";
 
 export default function BackButton({ fallback = "/locations" }: { fallback?: string }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { isDirty, setDirty } = useUnsavedChanges();
 
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const returnToParam = searchParams?.get("returnTo") ?? "";
+  const safeReturnTo = returnToParam.startsWith("/") && !returnToParam.startsWith("//") ? returnToParam : "";
+  const forcedTarget = safeReturnTo || (pathname === "/boxes" ? "/locations" : "");
+
   function goBack() {
     if (isDirty) {
       setShowConfirm(true);
+      return;
+    }
+
+    if (forcedTarget) {
+      router.push(forcedTarget);
       return;
     }
 
@@ -68,6 +79,10 @@ export default function BackButton({ fallback = "/locations" }: { fallback?: str
               onClick={() => {
                 setShowConfirm(false);
                 setDirty(false);
+                if (forcedTarget) {
+                  router.push(forcedTarget);
+                  return;
+                }
                 if (typeof window !== "undefined" && window.history.length > 1) {
                   router.back();
                 } else {

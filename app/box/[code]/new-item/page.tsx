@@ -109,7 +109,7 @@ export default function NewItemPage() {
       }
 
       if (fileToUpload.size > maxImageBytes) {
-        setError("Image must be 1 MB or smaller.");
+        setError("Upload blocked: exceeds 1 MB. (build: 2026-02-08)");
         setBusy(false);
         return;
       }

@@ -281,7 +281,7 @@ function ScanItemInner() {
 
     if (fileToUpload.size > maxImageBytes) {
       await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
-      setError("Image must be 1 MB or smaller.");
+      setError("Upload blocked: exceeds 1 MB. (build: 2026-02-08)");
       setBusy(false);
       return;
     }
