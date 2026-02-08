@@ -769,7 +769,7 @@ export default function BoxPage() {
       itemsHtml.push(`<div class="${labelClass}" style="${labelStyle}"><div class="inner"><div class="code">${b.code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}<img src="${qr}" /></div></div>`);
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label - ${box.code}</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:4px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden;position:relative} .label .inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start} .label img{width:46mm;height:46mm;display:block;margin:10mm auto 0} .label .code,.label .name{font-weight:900;font-size:28px;text-align:center;width:100%} .layout-40x30 .inner{width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)} .layout-40x30 img{width:22mm;height:22mm;margin:4px auto 0} .layout-50x80 .code,.layout-50x80 .name{font-size:28px} .no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label - ${box.code}</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:4px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden;position:relative} .label .inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start} .label img{width:46mm;height:46mm;display:block;margin:10mm auto 0} .label .code,.label .name{font-weight:900;font-size:28px;text-align:center;width:100%} .layout-40x30 .inner{width:18mm;height:28mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)} .layout-40x30 img{width:16mm;height:16mm;margin:4px auto 0} .layout-50x80 .code,.layout-50x80 .name{font-size:28px} .no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
 
 
     win.document.open();
@@ -812,10 +812,10 @@ export default function BoxPage() {
       el.style.boxSizing = "border-box";
       el.style.border = "1px solid #000";
       const codeSize = printLayout === "50x80" ? 28 : 24;
-      const qrWidth = printLayout === "50x80" ? "46mm" : "22mm";
-      const qrHeight = printLayout === "50x80" ? "46mm" : "22mm";
+      const qrWidth = printLayout === "50x80" ? "46mm" : "16mm";
+      const qrHeight = printLayout === "50x80" ? "46mm" : "16mm";
       const innerStyle = printLayout === "40x30"
-        ? "width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+        ? "width:18mm;height:28mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
         : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
       const qrMargin = printLayout === "50x80" ? "10mm" : "6px";
       el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:${qrMargin} auto 0" /></div></div>`;
@@ -863,7 +863,7 @@ export default function BoxPage() {
       const isLarge = printLayout === "50x80";
       const codeSize = isLarge ? 80 : 44;
       const nameSize = codeSize;
-      const qrSize = isLarge ? Math.round(pxW * 0.92) : Math.round(pxW * 0.62);
+      const qrSize = isLarge ? Math.round(pxW * 0.92) : 192;
 
       ctx.fillStyle = "#000";
       ctx.textAlign = "center";
@@ -876,8 +876,8 @@ export default function BoxPage() {
         ctx.translate(-pxH / 2, -pxW / 2);
         const innerW = pxH;
         const innerH = pxW;
-        const insetX = 36;
-        const insetY = 36;
+        const insetX = 72;
+        const insetY = 72;
         ctx.font = `900 ${codeSize}px Arial`;
         ctx.fillText(box.code, innerW / 2, 28 + insetY);
         if (box.name) {
@@ -950,10 +950,10 @@ export default function BoxPage() {
         el.style.boxSizing = "border-box";
         el.style.border = "1px solid #000";
         const codeSize = printLayout === "50x80" ? 28 : 24;
-        const qrWidth = printLayout === "50x80" ? "46mm" : "22mm";
-        const qrHeight = printLayout === "50x80" ? "46mm" : "22mm";
+        const qrWidth = printLayout === "50x80" ? "46mm" : "16mm";
+        const qrHeight = printLayout === "50x80" ? "46mm" : "16mm";
         const innerStyle = printLayout === "40x30"
-          ? "width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+          ? "width:18mm;height:28mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
           : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
         const qrMargin = printLayout === "50x80" ? "10mm" : "6px";
         el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:${qrMargin} auto 0" /></div></div>`;
@@ -1387,15 +1387,54 @@ export default function BoxPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <div style={{ width: 160, border: "1px solid #000", padding: 8, borderRadius: 8, textAlign: "center" }}>
-                  <div style={{ fontWeight: 900, fontSize: 26 }}>{box.code}</div>
-                  {previewQr ? (
-                    <img src={previewQr} alt="preview" style={{ width: "70%", display: "block", margin: "6px auto" }} />
-                  ) : (
-                    <div style={{ width: "70%", height: 80, background: "#f0f0f0", margin: "6px auto" }} />
-                  )}
-                  {box.name && <div style={{ fontSize: 12 }}>{box.name}</div>}
-                </div>
+                {(() => {
+                  const isLarge = printLayout === "50x80";
+                  const previewW = isLarge ? 200 : 160;
+                  const previewH = isLarge ? 320 : 120;
+                  const codeSize = isLarge ? 22 : 16;
+                  const qrSize = isLarge ? 120 : 56;
+                  const qrMarginTop = isLarge ? 40 : 6;
+                  const innerStyle: React.CSSProperties = isLarge
+                    ? { width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center" }
+                    : {
+                        width: 72,
+                        height: 112,
+                        position: "absolute",
+                        left: "50%",
+                        top: "50%",
+                        transform: "translate(-50%, -50%) rotate(90deg)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                      };
+
+                  return (
+                    <div
+                      style={{
+                        width: previewW,
+                        height: previewH,
+                        border: "1px solid #000",
+                        padding: 6,
+                        borderRadius: 8,
+                        position: "relative",
+                        background: "#fff",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div style={innerStyle}>
+                        <div style={{ fontWeight: 900, fontSize: codeSize, textAlign: "center", width: "100%" }}>{box.code}</div>
+                        {box.name && (
+                          <div style={{ fontWeight: 900, fontSize: codeSize, textAlign: "center", width: "100%", marginTop: 4 }}>{box.name}</div>
+                        )}
+                        {previewQr ? (
+                          <img src={previewQr} alt="preview" style={{ width: qrSize, height: qrSize, marginTop: qrMarginTop }} />
+                        ) : (
+                          <div style={{ width: qrSize, height: qrSize, background: "#f0f0f0", marginTop: qrMarginTop }} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1671,7 +1710,7 @@ export default function BoxPage() {
       const codeSize = printLayout === "50x80" ? 28 : 24;
       const qrWidth = printLayout === "50x80" ? "92%" : "70%";
       const innerStyle = printLayout === "40x30"
-        ? "width:288px;height:408px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+        ? "width:216px;height:336px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
         : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
       const qrMargin = printLayout === "50x80" ? "120px" : "6px";
       el.innerHTML = `<div style='position:relative;width:100%;height:100%'><div style='${innerStyle}'><div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%'>${box.code}</div>${box.name ? `<div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px'>${box.name}</div>` : ""}<img src='${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}' style='width:${qrWidth};display:block;margin:${qrMargin} auto 0' /></div></div>`;
