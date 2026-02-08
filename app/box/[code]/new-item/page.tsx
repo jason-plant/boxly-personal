@@ -99,7 +99,7 @@ export default function NewItemPage() {
       let fileToUpload = photoFile;
 
       try {
-        const { compressImage } = await import("../../../lib/image");
+        const { compressImage } = await import("../../../../lib/image");
         const compressed = await compressImage(photoFile, { maxSize: 1280, quality: 0.5, maxSizeMB: 0.1, aggressive: true });
         fileToUpload = compressed;
         setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
