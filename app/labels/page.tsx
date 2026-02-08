@@ -70,7 +70,7 @@ export default function LabelsPage() {
   const longPressTimers = useRef<Record<string, number>>({});
   const longPressFired = useRef<Record<string, boolean>>({});
   const [copies, setCopies] = useState<string>("1");
-  const [printLayout, setPrintLayout] = useState<string>("default");
+  const [printLayout, setPrintLayout] = useState<string>("30x40");
   const [showHint, setShowHint] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -145,23 +145,22 @@ export default function LabelsPage() {
       return;
     }
 
-    // determine label CSS based on layout
-    let labelStyle = "width:320px;";
-    if (printLayout === "40x30") {
-      labelStyle = "width:40mm;height:30mm;";
-    } else if (printLayout === "50x80") {
-      labelStyle = "width:50mm;height:80mm;";
+    // determine label CSS based on layout (portrait labels)
+    let labelStyle = "width:30mm;height:40mm;";
+    if (printLayout === "40x50") {
+      labelStyle = "width:40mm;height:50mm;";
     }
+    const labelClass = printLayout === "40x50" ? "label layout-40x50" : "label layout-30x40";
 
     for (let i = 0; i < finalCount; i++) {
       for (const code of selected) {
         const b = boxes.find((bb) => bb.code === code)!;
         const img = qrMap[code] || "";
-        itemsHtml.push(`<div class="label" style="${labelStyle}"><div class="code">${code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}${b.location ? `<div class="loc">${b.location}</div>` : ""}<img src="${img}" /></div>`);
+        itemsHtml.push(`<div class="${labelClass}" style="${labelStyle}"><div class="code">${code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}<img src="${img}" /></div>`);
       }
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:8px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden} .label img{width:70%;height:auto;display:block;margin:6px auto} .label .code{font-weight:900;font-size:26px;text-align:center;width:100%}.no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:6px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden} .label img{width:72%;height:auto;display:block;margin:6px auto 0} .label .code{font-weight:900;font-size:24px;text-align:center;width:100%} .label .name{text-align:center;font-size:12px;margin-top:4px}.layout-40x50 .code{font-size:30px}.layout-40x50 .name{font-size:13px}.layout-40x50 img{width:74%}.no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
 
     win.document.open();
     win.document.write(html);
@@ -176,14 +175,11 @@ export default function LabelsPage() {
       const files: File[] = [];
       const html2canvas = (await import("html2canvas")).default;
 
-      let pxWidth = 480;
-      let pxHeight = 360;
-      if (printLayout === "50x80") {
-        pxWidth = 600;
-        pxHeight = 960;
-      } else if (printLayout === "40x30") {
+      let pxWidth = 360;
+      let pxHeight = 480;
+      if (printLayout === "40x50") {
         pxWidth = 480;
-        pxHeight = 360;
+        pxHeight = 600;
       }
 
       for (const code of selected) {
@@ -200,16 +196,14 @@ export default function LabelsPage() {
         el.style.background = "#fff";
         el.style.fontFamily = "Arial, sans-serif";
 
-        const codeSize = printLayout === "50x80" ? 64 : 36;
-        const nameSize = printLayout === "50x80" ? 20 : 14;
-        const locSize = printLayout === "50x80" ? 16 : 12;
-        const qrWidth = printLayout === "40x30" ? "58%" : "70%";
-        const qrMarginTop = printLayout === "40x30" ? "6px" : "10px";
+        const codeSize = printLayout === "40x50" ? 44 : 32;
+        const nameSize = printLayout === "40x50" ? 16 : 12;
+        const qrWidth = printLayout === "40x50" ? "72%" : "68%";
+        const qrMarginTop = printLayout === "40x50" ? "8px" : "6px";
 
         el.innerHTML = `
           <div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>
           ${b.name ? `<div style=\"text-align:center;font-size:${nameSize}px;margin-top:6px\">${b.name}</div>` : ""}
-          ${b.location ? `<div style=\"text-align:center;font-size:${locSize}px;margin-top:4px;opacity:0.85\">${b.location}</div>` : ""}
           <img src="${qr}" style="width:${qrWidth};display:block;margin:${qrMarginTop} auto 0" />
         `;
 
@@ -258,12 +252,12 @@ export default function LabelsPage() {
     // determine page size based on layout
     let pageW = 210; // mm (A4)
     let pageH = 297;
-    if (printLayout === "40x30") {
+    if (printLayout === "30x40") {
+      pageW = 30;
+      pageH = 40;
+    } else if (printLayout === "40x50") {
       pageW = 40;
-      pageH = 30;
-    } else if (printLayout === "50x80") {
-      pageW = 50;
-      pageH = 80;
+      pageH = 50;
     }
 
     const pdf = new jsPDF({ unit: "mm", format: [pageW, pageH] });
@@ -280,7 +274,10 @@ export default function LabelsPage() {
         el.style.padding = "8px";
         el.style.boxSizing = "border-box";
         el.style.border = "1px solid #000";
-        el.innerHTML = `<div style="font-weight:900;font-size:26px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="text-align:center;font-size:12px;margin-top:6px">${b.name}</div>` : ""}${b.location ? `<div style="text-align:center;font-size:11px;margin-top:4px">${b.location}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:70%;display:block;margin:6px auto" />`;
+        const codeSize = printLayout === "40x50" ? 30 : 24;
+        const nameSize = printLayout === "40x50" ? 13 : 11;
+        const qrWidth = printLayout === "40x50" ? "74%" : "70%";
+        el.innerHTML = `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${code}</div>${b.name ? `<div style="text-align:center;font-size:${nameSize}px;margin-top:6px">${b.name}</div>` : ""}<img src="${qrMap[code] || ""}" style="width:${qrWidth};display:block;margin:6px auto" />`;
         el.style.position = "absolute";
         el.style.left = "-9999px";
         document.body.appendChild(el);
@@ -306,14 +303,11 @@ export default function LabelsPage() {
     if (selected.length === 0) return;
     const finalCount = parseCopies();
     if (finalCount < 1) return alert("Please enter a quantity of at least 1");
-    // Layouts: 40x30mm (480x360px), 50x80mm (600x960px), default (480x360px)
-    let pxWidth = 480, pxHeight = 360;
-    if (printLayout === "50x80") {
-      pxWidth = 600;
-      pxHeight = 960;
-    } else if (printLayout === "40x30") {
+    // Layouts: 30x40mm (360x480px), 40x50mm (480x600px)
+    let pxWidth = 360, pxHeight = 480;
+    if (printLayout === "40x50") {
       pxWidth = 480;
-      pxHeight = 360;
+      pxHeight = 600;
     }
     for (let i = 0; i < finalCount; i++) {
       for (const code of selected) {
@@ -331,21 +325,29 @@ export default function LabelsPage() {
         ctx.lineWidth = 4;
         ctx.strokeRect(0, 0, pxWidth, pxHeight);
         // Draw code (move down, size based on label)
-        let codeFont = "bold 64px Arial";
-        let codeY = 36;
-        let qrTop = 120;
+        let codeFont = "bold 48px Arial";
+        let codeY = 28;
+        let nameFont = "bold 18px Arial";
+        let nameY = 92;
+        let qrTop = 130;
         let qrMargin = 24;
-        if (printLayout === "50x80") {
-          codeFont = "bold 110px Arial";
-          codeY = 60;
-          qrTop = 200;
-          qrMargin = 40;
+        if (printLayout === "40x50") {
+          codeFont = "bold 64px Arial";
+          codeY = 34;
+          nameFont = "bold 20px Arial";
+          nameY = 112;
+          qrTop = 160;
+          qrMargin = 28;
         }
         ctx.font = codeFont;
         ctx.fillStyle = "#000";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillText(code, pxWidth / 2, codeY);
+        if (b.name) {
+          ctx.font = nameFont;
+          ctx.fillText(b.name, pxWidth / 2, nameY);
+        }
         // Draw QR code as large as possible below code
         const qrImg = new window.Image();
         qrImg.src = qrMap[code] || "";
@@ -409,9 +411,8 @@ export default function LabelsPage() {
                   <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     Layout:
                     <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                      <option value="default">Default</option>
-                      <option value="40x30">40 x 30 (mm)</option>
-                      <option value="50x80">50 x 80 (mm)</option>
+                      <option value="30x40">30 x 40 (mm)</option>
+                      <option value="40x50">40 x 50 (mm)</option>
                     </select>
                   </label>
                 </div>
@@ -542,9 +543,8 @@ export default function LabelsPage() {
               <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 Layout:
                 <select value={printLayout} onChange={(e) => setPrintLayout(e.target.value)} style={{ padding: 6, borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                  <option value="default">Default</option>
-                  <option value="40x30">40 x 30 (mm)</option>
-                  <option value="50x80">50 x 80 (mm)</option>
+                  <option value="30x40">30 x 40 (mm)</option>
+                  <option value="40x50">40 x 50 (mm)</option>
                 </select>
               </label>
             </div>
