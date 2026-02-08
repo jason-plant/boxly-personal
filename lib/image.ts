@@ -85,6 +85,17 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   const baseMaxSize = aggressive ? Math.min(maxSize, 1024) : maxSize;
   const baseQuality = aggressive ? Math.max(0.45, quality - 0.3) : quality;
 
+  console.log("[compressImage] input", {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    maxSize,
+    quality,
+    maxSizeMB,
+    maxUploadMB,
+    aggressive,
+  });
+
   const options = {
     maxWidthOrHeight: baseMaxSize,
     initialQuality: baseQuality,
@@ -93,21 +104,39 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
     ...(maxSizeMB ? { maxSizeMB } : {}),
   };
 
+  const preferCanvas = aggressive || Boolean(maxUploadMB);
+
   // Dynamically import the browser-only library at runtime (client only)
   const { default: imageCompression } = await import("browser-image-compression");
 
   const compressWithOptions = async (source: File, opts: any) => {
+    const size = opts.maxWidthOrHeight ?? baseMaxSize;
+    const q = opts.initialQuality ?? baseQuality;
+
+    if (preferCanvas) {
+      try {
+        return await canvasResize(source, size, fileType, q);
+      } catch (e) {
+        // fall through to library compression
+      }
+    }
+
     try {
       return await imageCompression(source, opts);
     } catch (e) {
-      const size = opts.maxWidthOrHeight ?? baseMaxSize;
-      const q = opts.initialQuality ?? baseQuality;
       return await canvasResize(source, size, fileType, q);
     }
   };
 
   // browser-image-compression handles EXIF orientation and returns a File/Blob
   let compressed: Blob = await compressWithOptions(file, options as any);
+
+  if ((aggressive || maxUploadMB) && compressed.size >= file.size) {
+    const forced = await canvasResize(file, baseMaxSize, fileType, baseQuality);
+    if (forced.size < compressed.size) {
+      compressed = forced;
+    }
+  }
 
   if (targetBytes && compressed.size > targetBytes) {
     const attempts = [
@@ -179,6 +208,12 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   // Otherwise wrap blob in a file with a sensible name
   const ext = fileType === "image/webp" ? "webp" : fileType.includes("png") ? "png" : "jpg";
   const newName = file.name.replace(/\.[^.]+$/, `.${ext}`);
-  return new File([compressed], newName, { type: fileType });
+  const output = new File([compressed], newName, { type: fileType });
+  console.log("[compressImage] output", {
+    name: output.name,
+    type: output.type,
+    size: output.size,
+  });
+  return output;
 }
 
