@@ -769,7 +769,7 @@ export default function BoxPage() {
       itemsHtml.push(`<div class="${labelClass}" style="${labelStyle}"><div class="inner"><div class="code">${b.code}</div>${b.name ? `<div class="name">${b.name}</div>` : ""}<img src="${qr}" /></div></div>`);
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label - ${box.code}</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:4px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden;position:relative} .label .inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start} .label img{width:46mm;height:46mm;display:block;margin:4px auto 0} .label .code,.label .name{font-weight:900;font-size:22px;text-align:center;width:100%} .layout-40x30 .inner{width:30mm;height:40mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)} .layout-40x30 img{width:26mm;height:26mm} .layout-50x80 .code,.layout-50x80 .name{font-size:22px} .no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label - ${box.code}</title><style>body{padding:20px;font-family:Arial} .label{border:1px solid #000;padding:4px;border-radius:8px;display:inline-block;margin:6px;box-sizing:border-box;vertical-align:top;overflow:hidden;position:relative} .label .inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start} .label img{width:46mm;height:46mm;display:block;margin:10mm auto 0} .label .code,.label .name{font-weight:900;font-size:28px;text-align:center;width:100%} .layout-40x30 .inner{width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)} .layout-40x30 img{width:22mm;height:22mm;margin:4px auto 0} .layout-50x80 .code,.layout-50x80 .name{font-size:28px} .no-print{display:none}@media print{body{padding:6mm} .label{page-break-inside:avoid}}</style></head><body>${itemsHtml.join("")}</body></html>`; 
 
 
     win.document.open();
@@ -811,13 +811,14 @@ export default function BoxPage() {
       el.style.padding = "8px";
       el.style.boxSizing = "border-box";
       el.style.border = "1px solid #000";
-      const codeSize = 24;
-      const qrWidth = printLayout === "50x80" ? "46mm" : "26mm";
-      const qrHeight = printLayout === "50x80" ? "46mm" : "26mm";
+      const codeSize = printLayout === "50x80" ? 28 : 24;
+      const qrWidth = printLayout === "50x80" ? "46mm" : "22mm";
+      const qrHeight = printLayout === "50x80" ? "46mm" : "22mm";
       const innerStyle = printLayout === "40x30"
-        ? "width:30mm;height:40mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+        ? "width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
         : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
-      el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:6px auto" /></div></div>`;
+      const qrMargin = printLayout === "50x80" ? "10mm" : "6px";
+      el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:${qrMargin} auto 0" /></div></div>`;
       el.style.position = "absolute";
       el.style.left = "-9999px";
       document.body.appendChild(el);
@@ -860,9 +861,9 @@ export default function BoxPage() {
       ctx.strokeRect(0, 0, pxW, pxH);
 
       const isLarge = printLayout === "50x80";
-      const codeSize = isLarge ? 72 : 44;
+      const codeSize = isLarge ? 80 : 44;
       const nameSize = codeSize;
-      const qrSize = isLarge ? Math.round(pxW * 0.92) : Math.round(pxW * 0.7);
+      const qrSize = isLarge ? Math.round(pxW * 0.92) : Math.round(pxW * 0.62);
 
       ctx.fillStyle = "#000";
       ctx.textAlign = "center";
@@ -874,17 +875,20 @@ export default function BoxPage() {
         ctx.rotate(Math.PI / 2);
         ctx.translate(-pxH / 2, -pxW / 2);
         const innerW = pxH;
+        const innerH = pxW;
+        const insetX = 36;
+        const insetY = 36;
         ctx.font = `900 ${codeSize}px Arial`;
-        ctx.fillText(box.code, innerW / 2, 28);
+        ctx.fillText(box.code, innerW / 2, 28 + insetY);
         if (box.name) {
           ctx.font = `900 ${nameSize}px Arial`;
-          ctx.fillText(box.name, innerW / 2, 28 + codeSize + 8);
+          ctx.fillText(box.name, innerW / 2, 28 + insetY + codeSize + 8);
         }
         const qr = new window.Image();
         qr.src = await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 });
         await new Promise((resolve) => { qr.onload = resolve; qr.onerror = resolve; });
         const qrX = (innerW - qrSize) / 2;
-        const qrY = 28 + codeSize + 8 + nameSize + 10;
+        const qrY = 28 + insetY + codeSize + 8 + nameSize + 10;
         ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
         ctx.restore();
       } else {
@@ -898,7 +902,7 @@ export default function BoxPage() {
         qr.src = await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 });
         await new Promise((resolve) => { qr.onload = resolve; qr.onerror = resolve; });
         const qrX = (pxW - qrSize) / 2;
-        const qrY = 28 + codeSize + 8 + nameSize + 10;
+        const qrY = 28 + codeSize + 8 + nameSize + 10 + (isLarge ? 120 : 0);
         ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
       }
 
@@ -945,13 +949,14 @@ export default function BoxPage() {
         el.style.padding = "6px";
         el.style.boxSizing = "border-box";
         el.style.border = "1px solid #000";
-        const codeSize = 24;
-        const qrWidth = printLayout === "50x80" ? "46mm" : "26mm";
-        const qrHeight = printLayout === "50x80" ? "46mm" : "26mm";
+        const codeSize = printLayout === "50x80" ? 28 : 24;
+        const qrWidth = printLayout === "50x80" ? "46mm" : "22mm";
+        const qrHeight = printLayout === "50x80" ? "46mm" : "22mm";
         const innerStyle = printLayout === "40x30"
-          ? "width:30mm;height:40mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+          ? "width:24mm;height:34mm;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
           : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
-        el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:6px auto" /></div></div>`;
+        const qrMargin = printLayout === "50x80" ? "10mm" : "6px";
+        el.innerHTML = `<div style="position:relative;width:100%;height:100%"><div style="${innerStyle}"><div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%">${box.code}</div>${box.name ? `<div style="font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px">${box.name}</div>` : ""}<img src="${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}" style="width:${qrWidth};height:${qrHeight};display:block;margin:${qrMargin} auto 0" /></div></div>`;
         el.style.position = "absolute";
         el.style.left = "-9999px";
         document.body.appendChild(el);
@@ -1663,12 +1668,13 @@ export default function BoxPage() {
       el.style.boxSizing = "border-box";
       el.style.border = "1px solid #000";
       el.style.background = "#fff";
-      const codeSize = 24;
+      const codeSize = printLayout === "50x80" ? 28 : 24;
       const qrWidth = printLayout === "50x80" ? "92%" : "70%";
       const innerStyle = printLayout === "40x30"
-        ? "width:360px;height:480px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
+        ? "width:288px;height:408px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)"
         : "width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start";
-      el.innerHTML = `<div style='position:relative;width:100%;height:100%'><div style='${innerStyle}'><div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%'>${box.code}</div>${box.name ? `<div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px'>${box.name}</div>` : ""}<img src='${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}' style='width:${qrWidth};display:block;margin:6px auto' /></div></div>`;
+      const qrMargin = printLayout === "50x80" ? "120px" : "6px";
+      el.innerHTML = `<div style='position:relative;width:100%;height:100%'><div style='${innerStyle}'><div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%'>${box.code}</div>${box.name ? `<div style='font-weight:900;font-size:${codeSize}px;text-align:center;width:100%;margin-top:4px'>${box.name}</div>` : ""}<img src='${await QRCode.toDataURL(`${window.location.origin}/box/${encodeURIComponent(box.code)}`, { width: 320, margin: 1 })}' style='width:${qrWidth};display:block;margin:${qrMargin} auto 0' /></div></div>`;
       el.style.position = "absolute";
       el.style.left = "-9999px";
       document.body.appendChild(el);
