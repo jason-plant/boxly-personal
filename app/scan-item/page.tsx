@@ -270,8 +270,8 @@ function ScanItemInner() {
       const { compressImage } = await import("../../lib/image");
       const compressed = await compressImage(capturedFile, { maxSize: 1280, quality: 0.5, maxSizeMB: 0.1, aggressive: true });
 
-      // Use compressed image only if it gives a size reduction
-      fileToUpload = compressed.size < capturedFile.size ? compressed : capturedFile;
+      // Always use the compressed output when available
+      fileToUpload = compressed;
       setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
     } catch (e: any) {
       // If compression fails, fall back to uploading the original file

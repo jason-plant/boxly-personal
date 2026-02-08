@@ -6,6 +6,18 @@ import { supabase } from "../../../lib/supabaseClient";
 import RequireAuth from "../../../components/RequireAuth";
 import { useUnsavedChanges } from "../../../components/UnsavedChangesProvider";
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes)) return "";
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 2 : 1)} MB`;
+}
+
+function safeFileName(name: string) {
+  return name.replace(/[^\w.\-]+/g, "_");
+}
+
 export default function NewItemPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code ? decodeURIComponent(String(params.code)) : "";
@@ -25,6 +37,7 @@ export default function NewItemPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compressInfo, setCompressInfo] = useState<string | null>(null);
 
   async function save() {
     if (!name.trim()) {
@@ -34,6 +47,7 @@ export default function NewItemPage() {
 
     setBusy(true);
     setError(null);
+    setCompressInfo(null);
 
     // ✅ Get logged-in user (needed for per-user photo folder)
     const userRes = await supabase.auth.getUser();
@@ -80,15 +94,35 @@ export default function NewItemPage() {
 
     // 3️⃣ Upload photo if provided
     if (photoFile) {
-      const ext = (photoFile.name.split(".").pop() || "jpg").toLowerCase();
+      const maxImageMB = 1;
+      const maxImageBytes = maxImageMB * 1024 * 1024;
+      let fileToUpload = photoFile;
+
+      try {
+        const { compressImage } = await import("../../../lib/image");
+        const compressed = await compressImage(photoFile, { maxSize: 1280, quality: 0.5, maxSizeMB: 0.1, aggressive: true });
+        fileToUpload = compressed;
+        setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
+      } catch (e: any) {
+        fileToUpload = photoFile;
+        setCompressInfo(`Upload size: ${formatBytes(fileToUpload.size)}`);
+      }
+
+      if (fileToUpload.size > maxImageBytes) {
+        setError("Image must be 1 MB or smaller.");
+        setBusy(false);
+        return;
+      }
+
+      const safeName = safeFileName(fileToUpload.name || "photo.jpg");
 
       // ✅ store inside a folder for THIS user
-      // example: 123e4567.../itemId-1700000000000.jpg
-      const fileName = `${user.id}/${itemId}-${Date.now()}.${ext}`;
+      // example: 123e4567.../itemId-1700000000000-photo.webp
+      const fileName = `${user.id}/${itemId}-${Date.now()}-${safeName}`;
 
       const upload = await supabase.storage
         .from("item-photos")
-        .upload(fileName, photoFile, { upsert: true });
+        .upload(fileName, fileToUpload, { upsert: true, contentType: fileToUpload.type || "image/jpeg" });
 
       if (upload.error) {
         setError(upload.error.message);
@@ -126,6 +160,7 @@ export default function NewItemPage() {
           </p>
 
           {error && <p style={{ color: "crimson" }}>{error}</p>}
+          {compressInfo && <p style={{ color: "#166534" }}>{compressInfo}</p>}
 
           <div style={{ display: "grid", gap: 12 }}>
             <input
