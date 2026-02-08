@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import React from "react";
+import React, { Suspense } from "react";
 import Image from "next/image";
 import { AuthProvider } from "./lib/auth";
 import { IconSettingsProvider } from "./lib/iconSettings";
@@ -110,7 +110,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 {/* Back button on far left */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <BackButton />
+                  <Suspense fallback={<div style={{ width: 44, height: 44 }} />}> 
+                    <BackButton />
+                  </Suspense>
                 </div>
                 {/* Title and section name, always visible and centered */}
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
