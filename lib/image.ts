@@ -28,6 +28,46 @@ export type CompressOptions = {
   aggressive?: boolean; // apply smaller dimensions and lower quality for tighter compression
 };
 
+async function canvasResize(file: File, maxWidthOrHeight: number, fileType: string, quality: number): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    const loaded = new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load image"));
+    });
+    img.src = url;
+    await loaded;
+
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+    const maxDim = Math.max(srcW, srcH) || 1;
+    const scale = Math.min(1, maxWidthOrHeight / maxDim);
+    const targetW = Math.max(1, Math.round(srcW * scale));
+    const targetH = Math.max(1, Math.round(srcH * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported");
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("Failed to encode image"))),
+        fileType,
+        quality
+      );
+    });
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function compressImage(file: File, opts: CompressOptions = {}): Promise<File> {
   if (typeof window === "undefined") {
     throw new Error("compressImage must be called in the browser");
@@ -56,8 +96,18 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   // Dynamically import the browser-only library at runtime (client only)
   const { default: imageCompression } = await import("browser-image-compression");
 
+  const compressWithOptions = async (source: File, opts: any) => {
+    try {
+      return await imageCompression(source, opts);
+    } catch (e) {
+      const size = opts.maxWidthOrHeight ?? baseMaxSize;
+      const q = opts.initialQuality ?? baseQuality;
+      return await canvasResize(source, size, fileType, q);
+    }
+  };
+
   // browser-image-compression handles EXIF orientation and returns a File/Blob
-  let compressed: Blob = await imageCompression(file, options as any);
+  let compressed: Blob = await compressWithOptions(file, options as any);
 
   if (targetBytes && compressed.size > targetBytes) {
     const attempts = [
@@ -75,7 +125,7 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
 
     let best = compressed;
     for (const attempt of attempts) {
-      const next = await imageCompression(file, { ...options, ...attempt } as any);
+      const next = await compressWithOptions(file, { ...options, ...attempt } as any);
       if (next.size < best.size) best = next;
       if (next.size <= targetBytes) {
         compressed = next;
@@ -97,7 +147,7 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
 
     let best = compressed;
     for (const attempt of attempts) {
-      const next = await imageCompression(file, { ...options, ...attempt } as any);
+      const next = await compressWithOptions(file, { ...options, ...attempt } as any);
       if (next.size < best.size) best = next;
       if (next.size <= hardBytes) {
         compressed = next;
@@ -110,13 +160,15 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
     }
 
     if (compressed.size > hardBytes) {
-      const finalAttempt = await imageCompression(file, {
+      const finalAttempt = await compressWithOptions(file, {
         ...options,
         maxWidthOrHeight: 512,
         initialQuality: 0.2,
       } as any);
-      if (finalAttempt.size < compressed.size) {
-        compressed = finalAttempt;
+      if (finalAttempt.size < compressed.size) compressed = finalAttempt;
+      if (compressed.size > hardBytes) {
+        const forced = await canvasResize(file, 512, fileType, 0.2);
+        if (forced.size < compressed.size) compressed = forced;
       }
     }
   }
