@@ -142,25 +142,6 @@ function BoxesInner() {
   }, []);
 
   const locationParam = searchParams.get("location");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (locationParam !== null) {
-      try {
-        localStorage.setItem("boxesLocationFilter", locationParam);
-      } catch {
-        // Ignore storage errors (private mode, etc.)
-      }
-      return;
-    }
-
-    const stored = localStorage.getItem("boxesLocationFilter");
-    if (stored) {
-      router.replace(`/boxes?location=${encodeURIComponent(stored)}`);
-    }
-  }, [locationParam, router]);
-
   const locationFilter = locationParam ?? "";
   const { selectedLocationIds, includeNoLocation } = useMemo(() => {
     const parts = locationFilter.split(",").map((value) => value.trim()).filter(Boolean);
