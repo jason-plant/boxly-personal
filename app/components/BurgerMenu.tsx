@@ -11,6 +11,7 @@ const ThemeToggleSmall = React.lazy(() => import("./ThemeToggle").then((m) => ({
 /* ===== Icons ===== */
 import { useAppIcon } from "./Icons";
 
+
 function MenuRow({
   icon,
   label,
@@ -145,6 +146,7 @@ export default function BurgerMenu() {
     };
   }, [open]);
 
+
   // Keep mounted for close animation
   const [mounted, setMounted] = useState(false);
 
@@ -212,6 +214,7 @@ export default function BurgerMenu() {
     setOpen(false);
     setTimeout(() => router.push(href), 200);
   }
+
 
   const overlay = mounted ? (
     <div

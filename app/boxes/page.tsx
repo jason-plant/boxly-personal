@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import RequireAuth from "../components/RequireAuth";
 import DeleteIconButton from "../components/DeleteIconButton";
@@ -30,6 +31,8 @@ export default function BoxesPage() {
 }
 
 function BoxesInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [boxes, setBoxes] = useState<BoxRow[]>([]);
   const [locations, setLocations] = useState<LocationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +140,77 @@ function BoxesInner() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const locationParam = searchParams.get("location");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (locationParam !== null) {
+      try {
+        localStorage.setItem("boxesLocationFilter", locationParam);
+      } catch {
+        // Ignore storage errors (private mode, etc.)
+      }
+      return;
+    }
+
+    const stored = localStorage.getItem("boxesLocationFilter");
+    if (stored) {
+      router.replace(`/boxes?location=${encodeURIComponent(stored)}`);
+    }
+  }, [locationParam, router]);
+
+  const locationFilter = locationParam ?? "";
+  const { selectedLocationIds, includeNoLocation } = useMemo(() => {
+    const parts = locationFilter.split(",").map((value) => value.trim()).filter(Boolean);
+    return {
+      selectedLocationIds: new Set(parts.filter((value) => value !== "none")),
+      includeNoLocation: parts.includes("none"),
+    };
+  }, [locationFilter]);
+
+  function updateLocationFilter(nextIds: Set<string>, nextIncludeNoLocation: boolean) {
+    const nextValues = [...nextIds];
+    if (nextIncludeNoLocation) nextValues.push("none");
+    const nextValue = nextValues.join(",");
+
+    if (!nextValue) {
+      router.push("/boxes");
+      return;
+    }
+
+    router.push(`/boxes?location=${encodeURIComponent(nextValue)}`);
+  }
+
+  const filteredBoxes = useMemo(() => {
+    if (!locationFilter) return boxes;
+
+    return boxes.filter((b) => {
+      if (b.location_id) return selectedLocationIds.has(b.location_id);
+      return includeNoLocation;
+    });
+  }, [boxes, locationFilter, selectedLocationIds, includeNoLocation]);
+
+  const filterLabel = useMemo(() => {
+    if (!locationFilter) return null;
+    if (includeNoLocation && selectedLocationIds.size === 0) return "No location";
+    if (!includeNoLocation && selectedLocationIds.size === 1) {
+      const onlyId = Array.from(selectedLocationIds)[0];
+      const loc = locations.find((l) => l.id === onlyId);
+      return loc?.name ?? "Unknown location";
+    }
+    const total = selectedLocationIds.size + (includeNoLocation ? 1 : 0);
+    return `${total} locations`;
+  }, [locationFilter, includeNoLocation, selectedLocationIds, locations]);
+
+  useEffect(() => {
+    const empty = new Set<string>();
+    setSelectedIds(empty);
+    selectedRef.current = empty;
+    setMoveMode(false);
+    setDestLocationId("");
+  }, [locationFilter]);
 
   function requestDeleteBox(b: BoxRow) {
     boxToDeleteRef.current = b;
@@ -284,7 +358,7 @@ function BoxesInner() {
   }
 
   function selectAll() {
-    const all = new Set(boxes.map((b) => b.id));
+    const all = new Set(filteredBoxes.map((b) => b.id));
     setSelectedIds(all);
     selectedRef.current = all;
   }
@@ -405,6 +479,28 @@ function BoxesInner() {
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {loading && <p>Loading boxes…</p>}
       {!loading && boxes.length === 0 && <p>No boxes yet.</p>}
+      {!loading && boxes.length > 0 && filteredBoxes.length === 0 && <p>No boxes for this filter.</p>}
+
+      {!loading && filterLabel && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 12,
+            padding: "8px 12px",
+            borderRadius: 12,
+            background: "#f3f4f6",
+            color: "#111",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            fontWeight: 800,
+          }}
+        >
+          <div>Filter: {filterLabel}</div>
+          <a href="/boxes" style={{ fontWeight: 900, textDecoration: "none", color: "#111" }}>Clear</a>
+        </div>
+      )}
 
       {/* Move Mode helper panel */}
       {moveMode && (
@@ -431,7 +527,7 @@ function BoxesInner() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <button type="button" onClick={selectAll} disabled={busy || boxes.length === 0}>
+            <button type="button" onClick={selectAll} disabled={busy || filteredBoxes.length === 0}>
               Select all
             </button>
             <button type="button" onClick={clearSelected} disabled={busy || selectedIds.size === 0}>
@@ -444,8 +540,49 @@ function BoxesInner() {
         </div>
       )}
 
+      {!loading && (
+        <details style={{ marginTop: 8, marginBottom: 12 }}>
+          <summary style={{ fontWeight: 900, cursor: "pointer" }}>Filter boxes</summary>
+          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => updateLocationFilter(new Set(), false)}
+              style={{ textAlign: "left", fontWeight: 800 }}
+            >
+              All locations
+            </button>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={includeNoLocation}
+                onChange={(e) => updateLocationFilter(new Set(selectedLocationIds), e.target.checked)}
+              />
+              No location
+            </label>
+            {locations.map((l) => (
+              <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={selectedLocationIds.has(l.id)}
+                  onChange={(e) => {
+                    const next = new Set(selectedLocationIds);
+                    if (e.target.checked) {
+                      next.add(l.id);
+                    } else {
+                      next.delete(l.id);
+                    }
+                    updateLocationFilter(next, includeNoLocation);
+                  }}
+                />
+                {l.name}
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+
       <div style={{ display: "grid", gap: 10 }}>
-        {boxes.map((b) => {
+        {filteredBoxes.map((b) => {
           const totalQty = b.items?.reduce((sum, it) => sum + (it.quantity ?? 0), 0) ?? 0;
           const isSelected = selectedIds.has(b.id);
 

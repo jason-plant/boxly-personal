@@ -12,7 +12,7 @@ import ThemeInitializer from "./components/ThemeInitializer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Storage Inventory",
+  title: "Boxley",
   description: "Box and item inventory system",
   icons: {
     icon: "/icons/icon-192.png",
