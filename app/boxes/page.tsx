@@ -541,9 +541,32 @@ function BoxesInner() {
       )}
 
       {!loading && (
-        <details style={{ marginTop: 8, marginBottom: 12 }}>
-          <summary style={{ fontWeight: 900, cursor: "pointer" }}>Filter boxes</summary>
-          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+        <details
+          style={{
+            marginTop: 8,
+            marginBottom: 12,
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 18,
+            padding: 14,
+            boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+          }}
+        >
+          <summary
+            style={{
+              fontWeight: 900,
+              cursor: "pointer",
+              listStyle: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <span>Filter boxes</span>
+            <span style={{ fontSize: 12, opacity: 0.6 }}>Tap to expand</span>
+          </summary>
+          <div style={{ display: "grid", gap: 8, marginTop: 12, maxHeight: 220, overflowY: "auto" }}>
             <button
               type="button"
               onClick={() => updateLocationFilter(new Set(), false)}
