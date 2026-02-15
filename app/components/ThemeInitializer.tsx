@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { applyTheme, getStoredPalette, getStoredTheme } from "../lib/theme";
+import { applyStoredCustomThemeVars, applyTheme, getStoredPalette, getStoredTheme, applyCustomButtonColors } from "../lib/theme";
 
 export default function ThemeInitializer() {
   useEffect(() => {
@@ -9,6 +9,8 @@ export default function ThemeInitializer() {
       const t = getStoredTheme();
       const p = getStoredPalette();
       applyTheme(t, p);
+      applyStoredCustomThemeVars();
+      applyCustomButtonColors();
       // If palette is 'custom', apply custom overrides
       if (p === 'custom') {
         const customText = localStorage.getItem('customText');

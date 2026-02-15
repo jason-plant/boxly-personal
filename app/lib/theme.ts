@@ -22,6 +22,64 @@ export function applyCustomButtonColors() {
   if (danger) document.documentElement.style.setProperty('--btn-danger', danger);
   if (neutral) document.documentElement.style.setProperty('--btn-neutral', neutral);
 }
+
+export const THEME_VAR_KEYS = [
+  "--bg",
+  "--surface",
+  "--border",
+  "--text",
+  "--muted",
+  "--accent",
+  "--header-bg",
+  "--header-border",
+  "--header-text",
+  "--btn-primary",
+  "--btn-primary-text",
+  "--btn-neutral",
+  "--btn-neutral-text",
+  "--btn-danger",
+  "--btn-danger-text",
+  "--font-body",
+  "--nav-active-text",
+] as const;
+
+export type ThemeVarKey = (typeof THEME_VAR_KEYS)[number];
+
+function storageKeyForVar(cssVar: ThemeVarKey) {
+  return `themeVar:${cssVar}`;
+}
+
+export function setCustomThemeVar(cssVar: ThemeVarKey, value: string) {
+  document.documentElement.style.setProperty(cssVar, value);
+  try {
+    localStorage.setItem(storageKeyForVar(cssVar), value);
+  } catch {}
+}
+
+export function getStoredThemeVar(cssVar: ThemeVarKey): string | null {
+  try {
+    return localStorage.getItem(storageKeyForVar(cssVar));
+  } catch {
+    return null;
+  }
+}
+
+export function clearCustomThemeVars() {
+  try {
+    for (const k of THEME_VAR_KEYS) {
+      localStorage.removeItem(storageKeyForVar(k));
+    }
+  } catch {}
+}
+
+export function applyStoredCustomThemeVars() {
+  try {
+    for (const k of THEME_VAR_KEYS) {
+      const v = localStorage.getItem(storageKeyForVar(k));
+      if (v) document.documentElement.style.setProperty(k, v);
+    }
+  } catch {}
+}
 export type PaletteKey = "ivory" | "stone" | "warm" | "anthracite" | "custom";
 
 export const PALETTES: Record<Extract<PaletteKey, 'ivory' | 'stone' | 'warm' | 'anthracite'>, { bg: string; surface: string; border: string; text: string; muted: string; accent: string; }> = {
@@ -98,6 +156,10 @@ export function applyTheme(theme: "light" | "dark", palette: PaletteKey) {
     root.style.setProperty("--muted", p.muted);
     root.style.setProperty("--accent", p.accent);
   }
+
+  // Apply any per-variable overrides (header/buttons/fonts/etc)
+  applyStoredCustomThemeVars();
+  applyCustomButtonColors();
 
   if (theme === "dark") {
     root.setAttribute("data-theme", "dark");

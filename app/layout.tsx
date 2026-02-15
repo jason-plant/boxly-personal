@@ -93,9 +93,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 position: "sticky",
                 top: 0,
                 zIndex: 100,
-                background: "rgba(246,247,251,0.92)",
+                background: "var(--header-bg)",
                 backdropFilter: "blur(10px)",
-                borderBottom: "1px solid #eaeaea",
+                borderBottom: "1px solid var(--header-border)",
+                color: "var(--header-text)",
               }}
             >
               <div
@@ -113,6 +114,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Suspense fallback={<div style={{ width: 44, height: 44 }} />}> 
                     <BackButton />
                   </Suspense>
+
+                  {/* Small solid logo (does not overlap controls/title) */}
+                  <Image
+                    src="/icons/icon-32.png"
+                    alt="Boxly"
+                    width={22}
+                    height={22}
+                    priority
+                    style={{ display: "block", flexShrink: 0 }}
+                  />
                 </div>
                 {/* Title and section name, always visible and centered */}
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -34,13 +34,13 @@ function MenuRow({
         gap: 14,
         padding: "14px 16px",
         borderRadius: 16,
-        border: "1px solid #e5e7eb",
-        background: active ? "#111" : "#fff",
-        color: active ? "#fff" : "#111",
+        border: "1px solid var(--border)",
+        background: active ? "var(--btn-primary)" : "var(--surface)",
+        color: active ? "var(--btn-primary-text)" : "var(--text)",
         fontWeight: 900,
         fontSize: 16,
         textAlign: "left",
-        boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+        boxShadow: "var(--shadow)",
       }}
     >
       <span style={{ fontSize: 20, width: 24, textAlign: "center" }}>{icon}</span>

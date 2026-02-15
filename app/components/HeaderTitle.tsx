@@ -43,7 +43,7 @@ export default function HeaderTitle({ hideIcon = false, iconOnly = false }: Head
         title = `${userName}'s Inventory`;
       }
     } else {
-      title = section ? `Storage Inventory\n${section}` : 'Storage Inventory';
+      title = section ? `Boxly\n${section}` : 'Boxly';
     }
     return { title, iconKey, href };
   }, [pathname, userName]);
