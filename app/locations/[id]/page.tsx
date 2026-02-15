@@ -7,6 +7,7 @@ import RequireAuth from "../../components/RequireAuth";
 import EditIconButton from "../../components/EditIconButton";
 import DeleteIconButton from "../../components/DeleteIconButton";
 import Modal from "../../components/Modal";
+import { getInventoryOwnerIdForUser } from "../../lib/inventoryScope";
 
 type LocationRow = {
   id: string;
@@ -113,11 +114,13 @@ function LocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const locRes = await supabase
       .from("locations")
       .select("id, name")
       .eq("id", locationId)
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .maybeSingle();
 
     if (!locRes.data || locRes.error) {
@@ -131,7 +134,7 @@ function LocationInner() {
     const allLocRes = await supabase
       .from("locations")
       .select("id, name")
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .order("name");
 
     setAllLocations((allLocRes.data ?? []) as LocationMini[]);
@@ -140,7 +143,7 @@ function LocationInner() {
       .from("boxes")
       .select("id, code, name, items ( quantity )")
       .eq("location_id", locationId)
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .order("code");
 
     if (boxRes.error) {
@@ -256,9 +259,11 @@ function LocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("locations")
-      .insert({ owner_id: userId, name: trimmed })
+      .insert({ owner_id: ownerId, name: trimmed })
       .select("id,name")
       .single();
 
@@ -316,10 +321,12 @@ function LocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("boxes")
       .update({ location_id: info.toLocationId })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .in("id", info.boxIds);
 
     if (res.error) {
@@ -365,10 +372,12 @@ function LocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("boxes")
       .update({ name: trimmed })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", b.id)
       .select("id,name")
       .single();
@@ -410,10 +419,12 @@ function LocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const itemsRes = await supabase
       .from("items")
       .select("id, photo_url")
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("box_id", b.id);
 
     if (itemsRes.error) {
@@ -437,7 +448,7 @@ function LocationInner() {
     const delItemsRes = await supabase
       .from("items")
       .delete()
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("box_id", b.id);
 
     if (delItemsRes.error) {
@@ -449,7 +460,7 @@ function LocationInner() {
     const delBoxRes = await supabase
       .from("boxes")
       .delete()
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", b.id);
 
     if (delBoxRes.error) {

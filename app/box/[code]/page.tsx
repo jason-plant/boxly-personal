@@ -10,6 +10,7 @@ import Modal from "../../components/Modal";
 import EditIconButton from "../../components/EditIconButton";
 import DeleteIconButton from "../../components/DeleteIconButton";
 import { useUnsavedChanges } from "../../components/UnsavedChangesProvider";
+import { getInventoryOwnerIdForUser } from "../../lib/inventoryScope";
 
 type BoxRow = {
   id: string;
@@ -169,10 +170,12 @@ export default function BoxPage() {
         return;
       }
 
+      const ownerId = await getInventoryOwnerIdForUser(userId);
+
       const boxRes = await supabase
         .from("boxes")
         .select("id, code, name, location_id, location")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .eq("code", code)
         .maybeSingle();
 
@@ -195,7 +198,7 @@ export default function BoxPage() {
       const itemsRes = await supabase
         .from("items")
         .select("id, name, description, photo_url, quantity")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .eq("box_id", boxRes.data.id)
         .order("name");
 
@@ -204,7 +207,7 @@ export default function BoxPage() {
       const boxesRes = await supabase
         .from("boxes")
         .select("id, code")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .order("code");
 
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
@@ -212,7 +215,7 @@ export default function BoxPage() {
       const locRes = await supabase
         .from("locations")
         .select("id, name")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .order("name");
 
       setLocations((locRes.data ?? []) as LocationRow[]);
@@ -264,10 +267,12 @@ export default function BoxPage() {
     const userId = sessionData.session?.user?.id;
     if (!userId) return;
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const { data } = await supabase
       .from("items")
       .select("id, name, description, photo_url, quantity")
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("box_id", boxId)
       .order("name");
 
@@ -298,7 +303,9 @@ export default function BoxPage() {
       return;
     }
 
-    const delRes = await supabase.from("items").delete().eq("owner_id", userId).eq("id", item.id);
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
+    const delRes = await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", item.id);
 
     if (delRes.error) {
       setError(delRes.error.message);
@@ -344,7 +351,9 @@ export default function BoxPage() {
       return;
     }
 
-    const res = await supabase.from("items").update({ quantity: safeQty }).eq("owner_id", userId).eq("id", itemId);
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
+    const res = await supabase.from("items").update({ quantity: safeQty }).eq("owner_id", ownerId).eq("id", itemId);
 
     if (res.error) {
       setError(res.error.message);
@@ -404,6 +413,8 @@ export default function BoxPage() {
       setBusy(false);
       return;
     }
+
+    const ownerId = await getInventoryOwnerIdForUser(userId);
 
     // Photo handling
     let newPhotoUrl: string | null = it.photo_url ?? null;
@@ -478,7 +489,7 @@ export default function BoxPage() {
     const res = await supabase
       .from("items")
       .update(updatePayload)
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", it.id)
       .select("id, name, description, photo_url, quantity")
       .single();
@@ -564,9 +575,11 @@ export default function BoxPage() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("locations")
-      .insert({ owner_id: userId, name: trimmed })
+      .insert({ owner_id: ownerId, name: trimmed })
       .select("id, name")
       .single();
 
@@ -606,10 +619,12 @@ export default function BoxPage() {
       return null;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const insertRes = await supabase
       .from("boxes")
       .insert({
-        owner_id: userId,
+        owner_id: ownerId,
         code: nextAutoCode,
         name: name.trim(),
         location_id: newBoxLocationId || null,
@@ -691,10 +706,12 @@ export default function BoxPage() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("items")
       .update({ box_id: info.toId })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .in("id", info.itemIds);
 
     if (res.error) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { getInventoryOwnerIdForUser } from "../lib/inventoryScope";
 import RequireAuth from "../components/RequireAuth";
 import DeleteIconButton from "../components/DeleteIconButton";
 import EditIconButton from "../components/EditIconButton";
@@ -284,10 +285,12 @@ function BoxesInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("boxes")
       .update({ name: trimmed })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", b.id)
       .select("id,name")
       .single();
@@ -386,9 +389,11 @@ function BoxesInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("locations")
-      .insert({ owner_id: userId, name: trimmed })
+      .insert({ owner_id: ownerId, name: trimmed })
       .select("id,name")
       .single();
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
+import { getInventoryOwnerIdForUser } from "../../../lib/inventoryScope";
 
 type LocationRow = {
   id: string;
@@ -49,11 +50,13 @@ export default function NewBoxInLocationPage() {
         return;
       }
 
+      const ownerId = await getInventoryOwnerIdForUser(userId);
+
       const locRes = await supabase
         .from("locations")
         .select("id, name")
         .eq("id", locationId)
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .maybeSingle();
 
       if (!locRes.data || locRes.error) {
@@ -66,7 +69,7 @@ export default function NewBoxInLocationPage() {
       const boxesRes = await supabase
         .from("boxes")
         .select("id, code")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .order("code");
 
       setAllBoxes((boxesRes.data ?? []) as BoxMini[]);
@@ -105,10 +108,12 @@ export default function NewBoxInLocationPage() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const insertRes = await supabase
       .from("boxes")
       .insert({
-        owner_id: userId,
+        owner_id: ownerId,
         code: nextAutoCode, // hidden from user
         name: trimmed,
         location_id: location.id,

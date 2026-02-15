@@ -13,6 +13,11 @@ export default function ProfileSettingsPage() {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string>("");
+
 
   useEffect(() => {
     async function loadUser() {
@@ -57,6 +62,45 @@ export default function ProfileSettingsPage() {
     setStatus("Account deletion is not available in this demo. Contact support.");
   }
 
+  async function sendInvite() {
+    const emailTrimmed = inviteEmail.trim().toLowerCase();
+    if (!emailTrimmed || !emailTrimmed.includes("@")) {
+      setInviteStatus("Enter a valid email address.");
+      return;
+    }
+
+    setInviteBusy(true);
+    setInviteStatus("");
+
+    const { data: sessionRes } = await supabase.auth.getSession();
+    const token = sessionRes.session?.access_token;
+    if (!token) {
+      setInviteStatus("You must be logged in.");
+      setInviteBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/invite", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: emailTrimmed }),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setInviteStatus(json?.error || "Failed to send invite.");
+      setInviteBusy(false);
+      return;
+    }
+
+    setInviteStatus("Invite sent.");
+    setInviteEmail("");
+    setInviteBusy(false);
+  }
+
   return (
     <RequireAuth>
       <main style={{ padding: 16 }}>
@@ -96,6 +140,63 @@ export default function ProfileSettingsPage() {
                 <button className="tap-btn danger" onClick={handleDeleteAccount} style={{ minWidth: 160, marginTop: 6 }}>
                   Delete account
                 </button>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 700 }}>Invite</label>
+                <div style={{ marginTop: 6, display: "grid", gap: 10 }}>
+                  {!inviteOpen ? (
+                    <button
+                      type="button"
+                      className="tap-btn"
+                      onClick={() => {
+                        setInviteOpen(true);
+                        setInviteStatus("");
+                      }}
+                      style={{ minWidth: 160 }}
+                    >
+                      Invite someone
+                    </button>
+                  ) : (
+                    <>
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="person@email.com"
+                        autoComplete="email"
+                        disabled={inviteBusy}
+                      />
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (inviteBusy) return;
+                            setInviteOpen(false);
+                            setInviteEmail("");
+                            setInviteStatus("");
+                          }}
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={sendInvite}
+                          disabled={inviteBusy || !inviteEmail.trim()}
+                          style={{ background: "#111", color: "#fff" }}
+                        >
+                          {inviteBusy ? "Sending…" : "Send invite"}
+                        </button>
+                      </div>
+
+                      {inviteStatus && (
+                        <div style={{ fontSize: 13, opacity: 0.8 }}>{inviteStatus}</div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 8 }}>{status}</div>

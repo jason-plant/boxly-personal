@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabaseClient";
+import { getInventoryOwnerIdForUser } from "../../../lib/inventoryScope";
 import RequireAuth from "../../../components/RequireAuth";
 import { useUnsavedChanges } from "../../../components/UnsavedChangesProvider";
 
@@ -53,6 +54,7 @@ export default function NewItemPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compressInfo, setCompressInfo] = useState<string | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
 
   async function startCamera() {
     try {
@@ -66,9 +68,11 @@ export default function NewItemPage() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      setCameraOn(true);
     } catch (e: any) {
       // Don't block the page; user can still choose a file
       setError(e?.message || "Unable to start camera. Check permissions.");
+      setCameraOn(false);
     }
   }
 
@@ -78,6 +82,7 @@ export default function NewItemPage() {
     for (const t of s.getTracks()) t.stop();
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
   }
 
   function captureFrame() {
@@ -128,7 +133,7 @@ export default function NewItemPage() {
     setError(null);
     setCompressInfo(null);
 
-    // ✅ Get logged-in user (needed for per-user photo folder)
+    // ✅ Get logged-in user (needed for inventory scope + per-user photo folder)
     const userRes = await supabase.auth.getUser();
     const user = userRes.data.user;
 
@@ -138,10 +143,13 @@ export default function NewItemPage() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(user.id);
+
     // 1️⃣ Find box id
     const boxRes = await supabase
       .from("boxes")
       .select("id, location_id, code")
+      .eq("owner_id", ownerId)
       .eq("code", code)
       .maybeSingle();
 
@@ -163,10 +171,12 @@ export default function NewItemPage() {
     const insertRes = await supabase
       .from("items")
       .insert({
+        owner_id: ownerId,
         box_id: boxRes.data.id,
         name: name.trim(),
         description: desc.trim() || null,
-        quantity: qty,
+        quantity: Math.max(1, Math.floor(Number(qty) || 1)),
+        photo_url: null,
       })
       .select("id")
       .single();
@@ -196,6 +206,8 @@ export default function NewItemPage() {
       }
 
       if (fileToUpload.size > maxImageBytes) {
+        // best-effort rollback so we don't create an item that the user thinks failed
+        await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", itemId);
         setError("Upload blocked: exceeds 1 MB. (build: 2026-02-08)");
         setBusy(false);
         return;
@@ -212,6 +224,8 @@ export default function NewItemPage() {
         .upload(fileName, fileToUpload, { upsert: true, contentType: fileToUpload.type || "image/jpeg" });
 
       if (upload.error) {
+        // best-effort rollback so we don't create an item that the user thinks failed
+        await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", itemId);
         setError(upload.error.message);
         setBusy(false);
         return;
@@ -221,7 +235,7 @@ export default function NewItemPage() {
         .from("item-photos")
         .getPublicUrl(fileName).data.publicUrl;
 
-      await supabase.from("items").update({ photo_url: publicUrl }).eq("id", itemId);
+      await supabase.from("items").update({ photo_url: publicUrl }).eq("owner_id", ownerId).eq("id", itemId);
     }
 
     // 4️⃣ Done → back to box
@@ -260,28 +274,7 @@ export default function NewItemPage() {
           {compressInfo && <p style={{ color: "#166534" }}>{compressInfo}</p>}
 
           <div style={{ display: "grid", gap: 12 }}>
-            <input
-              placeholder="Item name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              ref={nameInputRef}
-            />
-
-            <input
-              placeholder="Description (optional)"
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-            />
-
-            <input
-              type="number"
-              min={1}
-              value={qty}
-              onChange={(e) => setQty(Number(e.target.value))}
-            />
-
-            {/* PHOTO PICKERS */}
+            {/* CAMERA / PHOTO (top, so keyboard doesn't cover it) */}
             <div>
               <div style={{ marginBottom: 8, fontWeight: 700 }}>Add photo (optional)</div>
 
@@ -342,6 +335,28 @@ export default function NewItemPage() {
                 )}
               </div>
             </div>
+
+            {/* FIELDS (below camera) */}
+            <input
+              placeholder="Item name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus={!cameraOn}
+              ref={nameInputRef}
+            />
+
+            <input
+              placeholder="Description (optional)"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+            />
+
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(Number(e.target.value))}
+            />
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
               <button onClick={() => { setDirty(false); router.push(`/box/${encodeURIComponent(code)}`); }}>

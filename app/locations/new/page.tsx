@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import RequireAuth from "../../components/RequireAuth";
+import { getInventoryOwnerIdForUser } from "../../lib/inventoryScope";
 
 export default function NewLocationPage() {
   return (
@@ -41,11 +42,13 @@ function NewLocationInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // Insert location with per-user isolation
     const res = await supabase
       .from("locations")
       .insert({
-        owner_id: userId,
+        owner_id: ownerId,
         name: name.trim(),
       })
       .select("id")

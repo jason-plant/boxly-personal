@@ -6,6 +6,7 @@ import EditItemModal from "./EditItemModal";
 import { DeleteItemButton } from "./DeleteItemButton";
 import { supabase } from "../lib/supabaseClient";
 import RequireAuth from "../components/RequireAuth";
+import { getInventoryOwnerIdForUser } from "../lib/inventoryScope";
 
 type SearchItem = {
   id: string;
@@ -64,6 +65,8 @@ export default function SearchPage() {
         return;
       }
 
+      const ownerId = await getInventoryOwnerIdForUser(userId);
+
       // ✅ Pull location via boxes.location_id -> locations.name
 
       // Search for items where the query matches item name, box code, box name, or location name
@@ -82,7 +85,7 @@ export default function SearchPage() {
             location:locations ( name )
           )
         `)
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .limit(200);
 
       if (res.error) {

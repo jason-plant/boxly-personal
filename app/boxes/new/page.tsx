@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabaseClient";
 import RequireAuth from "../../components/RequireAuth";
 import Modal from "../../components/Modal";
 import { useUnsavedChanges } from "../../components/UnsavedChangesProvider";
+import { getInventoryOwnerIdForUser } from "../../lib/inventoryScope";
 
 type BoxMini = { code: string };
 
@@ -77,11 +78,13 @@ function NewBoxInner() {
       return null;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // existing codes (per user)
     const codesRes = await supabase
       .from("boxes")
       .select("code")
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .order("code");
 
     if (codesRes.error) {
@@ -97,7 +100,7 @@ function NewBoxInner() {
       const locRes = await supabase
         .from("locations")
         .select("id, name")
-        .eq("owner_id", userId)
+        .eq("owner_id", ownerId)
         .order("name");
 
       if (locRes.error) {
@@ -157,9 +160,11 @@ function NewBoxInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("locations")
-      .insert({ owner_id: userId, name: trimmed })
+      .insert({ owner_id: ownerId, name: trimmed })
       .select("id, name")
       .single();
 
@@ -190,11 +195,13 @@ function NewBoxInner() {
       return { ok: false as const, message: sessionErr?.message || "Not logged in." };
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const insertRes = await supabase
       .from("boxes")
       .insert([
         {
-          owner_id: userId,
+          owner_id: ownerId,
           code: code.toUpperCase(),
           name: name.trim() || null,
           location_id: locationId || null,

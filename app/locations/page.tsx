@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabaseClient";
 import EditIconButton from "../components/EditIconButton";
 import DeleteIconButton from "../components/DeleteIconButton";
 import { useUnsavedChanges } from "../components/UnsavedChangesProvider";
+import { getInventoryOwnerIdForUser } from "../lib/inventoryScope";
 
 type LocationRow = {
   id: string;
@@ -67,11 +68,13 @@ function LocationsInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // locations + count of related boxes
     const { data, error } = await supabase
       .from("locations")
       .select("id,name, boxes(count)")
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .order("name");
 
     if (error) {
@@ -119,10 +122,12 @@ function LocationsInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     const res = await supabase
       .from("locations")
       .update({ name: trimmed })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", l.id)
       .select("id,name")
       .single();
@@ -160,11 +165,13 @@ function LocationsInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // check if location has boxes
     const boxesRes = await supabase
       .from("boxes")
       .select("id", { count: "exact", head: true })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("location_id", l.id);
 
     if (boxesRes.error) {
@@ -190,7 +197,17 @@ function LocationsInner() {
     setBusy(true);
     setError(null);
 
-    const res = await supabase.from("locations").delete().eq("id", l.id);
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+    if (authErr || !userId) {
+      setError(authErr?.message || "Not logged in.");
+      setBusy(false);
+      return;
+    }
+
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
+    const res = await supabase.from("locations").delete().eq("owner_id", ownerId).eq("id", l.id);
     if (res.error) {
       setError(res.error.message);
       setBusy(false);

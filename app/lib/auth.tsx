@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
+import { acceptPendingInvitesOnce } from "./inventoryScope";
 
 export type AuthState = {
   user: User | null;
@@ -24,6 +25,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
       setUser(data.user ?? null);
       setLoading(false);
+      if (data.user) {
+        // best-effort: link any invites for this email
+        acceptPendingInvitesOnce();
+      }
     }
 
     init();
@@ -32,6 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) {
+        acceptPendingInvitesOnce();
+      }
     });
 
     return () => {

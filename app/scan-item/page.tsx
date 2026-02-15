@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import RequireAuth from "../components/RequireAuth";
 import { useUnsavedChanges } from "../components/UnsavedChangesProvider";
 import { supabase } from "../lib/supabaseClient";
+import { getInventoryOwnerIdForUser } from "../lib/inventoryScope";
 
 type BoxRow = {
   id: string;
@@ -95,6 +96,8 @@ function ScanItemInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // Pull location name via boxes.location_id -> locations.name
     const res = await supabase
       .from("boxes")
@@ -106,7 +109,7 @@ function ScanItemInner() {
         location:locations ( name )
       `
       )
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .order("code");
 
     if (res.error) {
@@ -234,11 +237,13 @@ function ScanItemInner() {
       return;
     }
 
+    const ownerId = await getInventoryOwnerIdForUser(userId);
+
     // 1) Create item first (no photo_url yet)
     const insertRes = await supabase
       .from("items")
       .insert({
-        owner_id: userId,
+        owner_id: ownerId,
         box_id: selectedBox.id,
         name: name.trim(),
         description: desc.trim() ? desc.trim() : null,
@@ -280,7 +285,7 @@ function ScanItemInner() {
     }
 
     if (fileToUpload.size > maxImageBytes) {
-      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+      await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", itemId);
       setError("Upload blocked: exceeds 1 MB. (build: 2026-02-08)");
       setBusy(false);
       return;
@@ -296,7 +301,7 @@ function ScanItemInner() {
 
     if (uploadRes.error) {
       // rollback item if upload fails (best effort)
-      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+      await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", itemId);
       setError(uploadRes.error.message);
       setBusy(false);
       return;
@@ -304,7 +309,7 @@ function ScanItemInner() {
 
     if (uploadRes?.error) {
       // rollback item if upload fails (best effort)
-      await supabase.from("items").delete().eq("owner_id", userId).eq("id", itemId);
+      await supabase.from("items").delete().eq("owner_id", ownerId).eq("id", itemId);
       setError(uploadRes.error.message);
       setBusy(false);
       return;
@@ -317,7 +322,7 @@ function ScanItemInner() {
     const updateRes = await supabase
       .from("items")
       .update({ photo_url: photoUrl })
-      .eq("owner_id", userId)
+      .eq("owner_id", ownerId)
       .eq("id", itemId);
 
     if (updateRes.error) {
