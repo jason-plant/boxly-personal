@@ -126,7 +126,7 @@ export default function ProfileSettingsPage() {
         {loading ? (
           <div>Loading…</div>
         ) : (
-          <section style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: 14, borderRadius: 14, maxWidth: 420 }}>
+          <section style={{ background: "var(--card-bg)", border: "1px solid var(--border)", padding: 14, borderRadius: 14, maxWidth: 420 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
               <form onSubmit={handleNameSave} style={{ display: "flex", flexDirection: "column", gap: 8 }}>

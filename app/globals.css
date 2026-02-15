@@ -67,6 +67,9 @@
   --header-border: var(--border);
   --header-text: var(--text);
 
+  /* Cards */
+  --card-bg: var(--surface);
+
   /* Buttons */
   --btn-primary: #111;
   --btn-primary-text: #fff;

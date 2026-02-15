@@ -100,9 +100,9 @@ export default function Modal({
   const panelStyle: React.CSSProperties = {
     width: anchor === "top-right" ? undefined : "100%",
     maxWidth: anchor === "top-right" ? 420 : 520,
-    background: "#fff",
+    background: "var(--card-bg)",
     borderRadius: 18,
-    border: "1px solid #e5e7eb",
+    border: "1px solid var(--border)",
     boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
     padding: 14,
     marginTop: anchor === "top-right" ? 56 : undefined, // offset beneath navbar

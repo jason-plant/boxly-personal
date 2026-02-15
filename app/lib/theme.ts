@@ -25,6 +25,7 @@ export function applyCustomButtonColors() {
 
 export const THEME_VAR_KEYS = [
   "--bg",
+  "--card-bg",
   "--surface",
   "--border",
   "--text",
@@ -142,6 +143,7 @@ export function applyTheme(theme: "light" | "dark", palette: PaletteKey) {
     const customSurface = localStorage.getItem('customSurface') || '#fff';
     const customText = localStorage.getItem('customText') || '#111';
     root.style.setProperty("--bg", customBg);
+    root.style.setProperty("--card-bg", customSurface);
     root.style.setProperty("--surface", customSurface);
     root.style.setProperty("--border", '#e5e7eb');
     root.style.setProperty("--text", customText);
@@ -150,6 +152,7 @@ export function applyTheme(theme: "light" | "dark", palette: PaletteKey) {
   } else {
     const p = PALETTES[palette];
     root.style.setProperty("--bg", p.bg);
+    root.style.setProperty("--card-bg", p.surface);
     root.style.setProperty("--surface", p.surface);
     root.style.setProperty("--border", p.border);
     root.style.setProperty("--text", p.text);

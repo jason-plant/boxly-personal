@@ -317,7 +317,8 @@ export default function SettingsPage() {
       localStorage.setItem("customBg", value);
     } else if (type === "surface") {
       setCustomSurface(value);
-      document.documentElement.style.setProperty("--surface", value);
+      // Back-compat: treat stored customSurface as the card background.
+      document.documentElement.style.setProperty("--card-bg", value);
       localStorage.setItem("customSurface", value);
     }
   }
@@ -392,7 +393,7 @@ export default function SettingsPage() {
         {tab === 'appearance' ? (
           <>
             {/* Appearance section (moved from above) */}
-            <section style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: 12, borderRadius: 14, boxSizing: "border-box", overflow: "hidden" }}>
+            <section style={{ background: "var(--card-bg)", border: "1px solid var(--border)", padding: 12, borderRadius: 14, boxSizing: "border-box", overflow: "hidden" }}>
               <h2 style={{ margin: "0 0 8px 0" }}>Appearance</h2>
 
               {/* Icon style pickers */}
@@ -483,14 +484,22 @@ export default function SettingsPage() {
                   />
 
                   <ColorControl
-                    label="Card / surface"
-                    cssVar="--surface"
-                    value={themeVars["--surface"] || customSurface || "#ffffff"}
+                    label="Cards"
+                    cssVar="--card-bg"
+                    value={themeVars["--card-bg"] || customSurface || themeVars["--surface"] || "#ffffff"}
                     onChange={(v) => {
-                      setVar("--surface", v);
+                      setVar("--card-bg", v);
                       handleCustomChange("surface", v);
                     }}
-                    hint="Used for cards, inputs, and panels."
+                    hint="Card/section background."
+                  />
+
+                  <ColorControl
+                    label="Surface"
+                    cssVar="--surface"
+                    value={themeVars["--surface"] || "#ffffff"}
+                    onChange={(v) => setVar("--surface", v)}
+                    hint="Inputs, menus, and UI surfaces."
                   />
 
                   <ColorControl
@@ -713,7 +722,7 @@ export default function SettingsPage() {
               <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ background: "var(--bg)", border: "1px solid var(--border)", padding: 12, borderRadius: 10 }}>
-                    <div style={{ background: "var(--surface)", padding: 12, borderRadius: 8, border: "1px solid var(--border)", maxWidth: 360 }}>
+                    <div style={{ background: "var(--card-bg)", padding: 12, borderRadius: 8, border: "1px solid var(--border)", maxWidth: 360 }}>
                       <div style={{ fontWeight: 900, fontSize: 18 }}>App preview</div>
                       <div style={{ marginTop: 8, color: "var(--muted)" }}>This card shows how the palette affects surface, borders, text, and accent.</div>
                       <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
@@ -730,7 +739,7 @@ export default function SettingsPage() {
             </section>
             <section style={{ marginTop: 18 }}>
               <h2 style={{ margin: "0 0 8px 0" }}>Formats</h2>
-              <div style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: 12, borderRadius: 14 }}>
+              <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", padding: 12, borderRadius: 14 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <input
                     type="checkbox"
