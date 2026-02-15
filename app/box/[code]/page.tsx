@@ -18,6 +18,7 @@ type BoxRow = {
   name: string | null;
   location_id: string | null;
   location: string | null;
+  hidden_from_viewers?: boolean | null;
 };
 
 type BoxMini = {
@@ -88,6 +89,9 @@ export default function BoxPage() {
   const [box, setBox] = useState<BoxRow | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [allBoxes, setAllBoxes] = useState<BoxMini[]>([]);
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [inventoryOwnerId, setInventoryOwnerId] = useState<string | null>(null);
 
   // Locations for "create box" modal
   const [locations, setLocations] = useState<LocationRow[]>([]);
@@ -171,10 +175,12 @@ export default function BoxPage() {
       }
 
       const ownerId = await getInventoryOwnerIdForUser(userId);
+      setCurrentUserId(userId);
+      setInventoryOwnerId(ownerId);
 
       const boxRes = await supabase
         .from("boxes")
-        .select("id, code, name, location_id, location")
+        .select("id, code, name, location_id, location, hidden_from_viewers")
         .eq("owner_id", ownerId)
         .eq("code", code)
         .maybeSingle();
@@ -253,6 +259,34 @@ export default function BoxPage() {
 
     load();
   }, [code]);
+
+  const isOwner = Boolean(currentUserId && inventoryOwnerId && currentUserId === inventoryOwnerId);
+
+  async function toggleHiddenFromViewOnlyMembers() {
+    if (!box) return;
+    if (!inventoryOwnerId) return;
+
+    setBusy(true);
+    setError(null);
+
+    const nextHidden = !Boolean(box.hidden_from_viewers);
+    const res = await supabase
+      .from("boxes")
+      .update({ hidden_from_viewers: nextHidden })
+      .eq("owner_id", inventoryOwnerId)
+      .eq("id", box.id)
+      .select("id, hidden_from_viewers")
+      .single();
+
+    if (res.error || !res.data) {
+      setError(res.error?.message || "Failed to update box lock.");
+      setBusy(false);
+      return;
+    }
+
+    setBox((prev) => (prev ? { ...prev, hidden_from_viewers: (res.data as any).hidden_from_viewers } : prev));
+    setBusy(false);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1041,6 +1075,17 @@ export default function BoxPage() {
                 >
                   Print label
                 </button>
+
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={toggleHiddenFromViewOnlyMembers}
+                    disabled={busy}
+                    style={{ fontWeight: 900, padding: "8px 12px", borderRadius: 12 }}
+                  >
+                    {box.hidden_from_viewers ? "Unhide from view-only" : "Hide from view-only"}
+                  </button>
+                )}
               </div>
 
             </div>

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const invitesRes = await admin
       .from("inventory_invites")
-      .select("owner_id")
+      .select("owner_id, role")
       .eq("email", email)
       .is("accepted_at", null);
 
@@ -30,9 +30,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const invites = (invitesRes.data ?? []) as Array<{ owner_id: string }>;
+    const invites = (invitesRes.data ?? []) as Array<{ owner_id: string; role?: string | null }>;
 
     for (const inv of invites) {
+      const roleRaw = String(inv.role || "editor").toLowerCase();
+      const role = roleRaw === "viewer" ? "viewer" : "editor";
       // insert membership (idempotent)
       await admin
         .from("inventory_members")
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
             owner_id: inv.owner_id,
             member_id: user.id,
             member_email: email,
+            role,
           },
           { onConflict: "owner_id,member_id" }
         );

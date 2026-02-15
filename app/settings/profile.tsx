@@ -15,6 +15,7 @@ export default function ProfileSettingsPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string>("");
   const [inviteLink, setInviteLink] = useState<string>("");
@@ -88,7 +89,7 @@ export default function ProfileSettingsPage() {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email: emailTrimmed }),
+      body: JSON.stringify({ email: emailTrimmed, role: inviteRole }),
     });
 
     const json = await res.json().catch(() => ({}));
@@ -176,6 +177,18 @@ export default function ProfileSettingsPage() {
                     </button>
                   ) : (
                     <>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ fontSize: 13, opacity: 0.8 }}>Access</div>
+                        <select
+                          value={inviteRole}
+                          onChange={(e) => setInviteRole((e.target.value as any) === "viewer" ? "viewer" : "editor")}
+                          disabled={inviteBusy}
+                        >
+                          <option value="editor">Full access</option>
+                          <option value="viewer">View only</option>
+                        </select>
+                      </div>
+
                       <input
                         type="email"
                         value={inviteEmail}
@@ -194,6 +207,7 @@ export default function ProfileSettingsPage() {
                             setInviteEmail("");
                             setInviteStatus("");
                             setInviteLink("");
+                            setInviteRole("editor");
                           }}
                         >
                           Cancel

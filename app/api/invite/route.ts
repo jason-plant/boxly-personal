@@ -10,11 +10,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
     }
 
-    const body = (await req.json().catch(() => null)) as { email?: string } | null;
+    const body = (await req.json().catch(() => null)) as { email?: string; role?: string } | null;
     const email = (body?.email || "").trim().toLowerCase();
     if (!email || !email.includes("@")) {
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
     }
+
+    const roleRaw = String(body?.role || "editor").toLowerCase();
+    const role = roleRaw === "viewer" ? "viewer" : "editor";
 
     const admin = getSupabaseAdminClient();
 
@@ -42,6 +45,7 @@ export async function POST(req: Request) {
         {
           owner_id: inventoryOwnerId,
           email,
+          role,
           accepted_at: null,
         },
         { onConflict: "owner_id,email" }
