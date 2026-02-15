@@ -19,26 +19,28 @@ export async function POST(req: Request) {
     const admin = getSupabaseAdminClient();
 
     const userRes = await admin.auth.getUser(token);
-    const owner = userRes.data.user;
-    if (!owner) {
+    const inviter = userRes.data.user;
+    if (!inviter) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
 
-    // Send Supabase invite email (creates user if needed)
-    const inviteRes = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${new URL(req.url).origin}/login`,
-    });
+    // If the inviter is a member of someone else's inventory, invite into that owner's inventory.
+    const ownerLookup = await admin
+      .from("inventory_members")
+      .select("owner_id")
+      .eq("member_id", inviter.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-    if (inviteRes.error) {
-      return NextResponse.json({ error: inviteRes.error.message }, { status: 400 });
-    }
+    const inventoryOwnerId = (ownerLookup.data as any)?.owner_id || inviter.id;
 
     // Record invite so we can link membership after sign-in
     const insert = await admin
       .from("inventory_invites")
       .upsert(
         {
-          owner_id: owner.id,
+          owner_id: inventoryOwnerId,
           email,
           accepted_at: null,
         },
@@ -50,7 +52,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, warning: insert.error.message });
     }
 
-    return NextResponse.json({ ok: true });
+    const origin = new URL(req.url).origin;
+    const link = `${origin}/signup?email=${encodeURIComponent(email)}`;
+    return NextResponse.json({ ok: true, link });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }

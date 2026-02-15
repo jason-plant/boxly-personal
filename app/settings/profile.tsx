@@ -17,6 +17,7 @@ export default function ProfileSettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string>("");
+  const [inviteLink, setInviteLink] = useState<string>("");
 
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export default function ProfileSettingsPage() {
 
     setInviteBusy(true);
     setInviteStatus("");
+    setInviteLink("");
 
     const { data: sessionRes } = await supabase.auth.getSession();
     const token = sessionRes.session?.access_token;
@@ -96,7 +98,22 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    setInviteStatus("Invite sent.");
+    const link = String(json?.link || "");
+    if (link) {
+      setInviteLink(link);
+      setInviteStatus("Invite link created. Copy and send it (e.g. WhatsApp). ");
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(link);
+          setInviteStatus("Invite link copied to clipboard. Paste it in WhatsApp.");
+        }
+      } catch {
+        // clipboard may be blocked; user can copy manually
+      }
+    } else {
+      setInviteStatus("Invite recorded.");
+    }
+
     setInviteEmail("");
     setInviteBusy(false);
   }
@@ -176,6 +193,7 @@ export default function ProfileSettingsPage() {
                             setInviteOpen(false);
                             setInviteEmail("");
                             setInviteStatus("");
+                            setInviteLink("");
                           }}
                         >
                           Cancel
@@ -193,6 +211,25 @@ export default function ProfileSettingsPage() {
 
                       {inviteStatus && (
                         <div style={{ fontSize: 13, opacity: 0.8 }}>{inviteStatus}</div>
+                      )}
+
+                      {inviteLink && (
+                        <div style={{ display: "grid", gap: 8 }}>
+                          <input value={inviteLink} readOnly />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(inviteLink);
+                                setInviteStatus("Invite link copied to clipboard. Paste it in WhatsApp.");
+                              } catch {
+                                setInviteStatus("Copy failed — select the link and copy manually.");
+                              }
+                            }}
+                          >
+                            Copy link
+                          </button>
+                        </div>
                       )}
                     </>
                   )}

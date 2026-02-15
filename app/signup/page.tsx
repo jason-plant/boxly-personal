@@ -16,6 +16,17 @@ export default function SignupPage() {
     if (!loading && user) window.location.href = "/locations";
   }, [loading, user]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const qpEmail = new URL(window.location.href).searchParams.get("email")?.trim() || "";
+      if (qpEmail && !email) setEmail(qpEmail);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function onSignup(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
