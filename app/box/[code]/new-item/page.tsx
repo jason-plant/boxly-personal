@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import RequireAuth from "../../../components/RequireAuth";
 import { useUnsavedChanges } from "../../../components/UnsavedChangesProvider";
@@ -18,10 +18,25 @@ function safeFileName(name: string) {
   return name.replace(/[^\w.\-]+/g, "_");
 }
 
+function dataURLToBlob(dataUrl: string) {
+  const [meta, b64] = dataUrl.split(",");
+  const mimeMatch = /data:(.*?);base64/.exec(meta);
+  const mime = mimeMatch?.[1] || "image/jpeg";
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 export default function NewItemPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code ? decodeURIComponent(String(params.code)) : "";
   const router = useRouter();
+
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -38,6 +53,70 @@ export default function NewItemPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compressInfo, setCompressInfo] = useState<string | null>(null);
+
+  async function startCamera() {
+    try {
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (e: any) {
+      // Don't block the page; user can still choose a file
+      setError(e?.message || "Unable to start camera. Check permissions.");
+    }
+  }
+
+  function stopCamera() {
+    const s = streamRef.current;
+    if (!s) return;
+    for (const t of s.getTracks()) t.stop();
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }
+
+  function captureFrame() {
+    setError(null);
+    const v = videoRef.current;
+    if (!v) return;
+
+    const w = v.videoWidth || 1280;
+    const h = v.videoHeight || 720;
+    if (!w || !h) {
+      setError("Camera not ready yet.");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setError("Canvas not supported.");
+      return;
+    }
+
+    ctx.drawImage(v, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const blob = dataURLToBlob(dataUrl);
+    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+    setPhotoFile(file);
+    setCompressInfo(null);
+    setTimeout(() => nameInputRef.current?.focus(), 50);
+  }
+
+  useEffect(() => {
+    // Auto-start camera like scan-item
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    startCamera();
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function save() {
     if (!name.trim()) {
@@ -62,7 +141,7 @@ export default function NewItemPage() {
     // 1️⃣ Find box id
     const boxRes = await supabase
       .from("boxes")
-      .select("id")
+      .select("id, location_id, code")
       .eq("code", code)
       .maybeSingle();
 
@@ -70,6 +149,14 @@ export default function NewItemPage() {
       setError("Box not found.");
       setBusy(false);
       return;
+    }
+
+    // Cache box -> location mapping for smart Back button
+    if (typeof window !== "undefined" && boxRes.data) {
+      const key = `boxLocation:${String(boxRes.data.code || code).toUpperCase()}`;
+      const locId = (boxRes.data as any).location_id as string | null;
+      if (locId) window.sessionStorage.setItem(key, locId);
+      else window.sessionStorage.removeItem(key);
     }
 
     // 2️⃣ Create item first
@@ -138,8 +225,18 @@ export default function NewItemPage() {
     }
 
     // 4️⃣ Done → back to box
+    // Stay on this page ready to add another item
+    setName("");
+    setDesc("");
+    setQty(1);
+    setPhotoFile(null);
+    setCompressInfo(null);
     setDirty(false);
-    router.push(`/box/${encodeURIComponent(code)}`);
+    setBusy(false);
+
+    // Re-focus the name field for fast entry
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+    return;
   }
 
   return (
@@ -168,6 +265,7 @@ export default function NewItemPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
+              ref={nameInputRef}
             />
 
             <input
@@ -186,6 +284,25 @@ export default function NewItemPage() {
             {/* PHOTO PICKERS */}
             <div>
               <div style={{ marginBottom: 8, fontWeight: 700 }}>Add photo (optional)</div>
+
+              {/* Live camera preview (auto-starts) */}
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  background: "#000",
+                  width: "100%",
+                  maxWidth: 520,
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  style={{ width: "100%", display: "block" }}
+                />
+              </div>
 
               <input
                 id="cam"
@@ -211,8 +328,11 @@ export default function NewItemPage() {
               />
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button type="button" onClick={() => document.getElementById("cam")?.click()}>
-                  Take photo
+                <button type="button" onClick={captureFrame}>
+                  Capture photo
+                </button>
+                <button type="button" onClick={startCamera}>
+                  Restart camera
                 </button>
                 <button type="button" onClick={() => document.getElementById("file")?.click()}>
                   Choose file

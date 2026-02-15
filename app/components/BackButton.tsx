@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useUnsavedChanges } from "./UnsavedChangesProvider";
 import Modal from "./Modal";
+
+function getBoxCodeFromPath(pathname: string | null): string {
+  if (!pathname) return "";
+  const m = /^\/box\/([^/?#]+)(?:\/|$)/i.exec(pathname);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
 
 export default function BackButton({ fallback = "/locations" }: { fallback?: string }) {
   const router = useRouter();
@@ -14,9 +25,25 @@ export default function BackButton({ fallback = "/locations" }: { fallback?: str
 
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const boxCode = useMemo(() => getBoxCodeFromPath(pathname), [pathname]);
+  const [boxLocationTarget, setBoxLocationTarget] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!boxCode) {
+      setBoxLocationTarget("");
+      return;
+    }
+
+    const key = `boxLocation:${boxCode.toUpperCase()}`;
+    const locId = window.sessionStorage.getItem(key) || "";
+    if (locId) setBoxLocationTarget(`/locations/${encodeURIComponent(locId)}`);
+    else setBoxLocationTarget("");
+  }, [boxCode]);
+
   const returnToParam = searchParams?.get("returnTo") ?? "";
   const safeReturnTo = returnToParam.startsWith("/") && !returnToParam.startsWith("//") ? returnToParam : "";
-  const forcedTarget = safeReturnTo || (pathname === "/boxes" ? "/locations" : "");
+  const forcedTarget = safeReturnTo || boxLocationTarget || (pathname === "/boxes" ? "/locations" : "");
 
   function goBack() {
     if (isDirty) {

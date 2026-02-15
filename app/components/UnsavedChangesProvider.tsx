@@ -12,6 +12,8 @@ const ctx = createContext<Context>({ isDirty: false, setDirty: () => {} });
 export function UnsavedChangesProvider({ children }: { children: React.ReactNode }) {
   const [isDirty, setIsDirty] = useState(false);
 
+  const setDirty = useCallback((v: boolean) => setIsDirty(v), []);
+
   // beforeunload to prevent accidental close/refresh
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -25,7 +27,7 @@ export function UnsavedChangesProvider({ children }: { children: React.ReactNode
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty]);
 
-  const value = useMemo(() => ({ isDirty, setDirty: (v: boolean) => setIsDirty(v) }), [isDirty]);
+  const value = useMemo(() => ({ isDirty, setDirty }), [isDirty, setDirty]);
 
   return <ctx.Provider value={value}>{children}</ctx.Provider>;
 }

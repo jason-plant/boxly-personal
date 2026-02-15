@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { supabase } from "../../lib/supabaseClient";
@@ -14,6 +15,7 @@ type BoxRow = {
   id: string;
   code: string;
   name: string | null;
+  location_id: string | null;
   location: string | null;
 };
 
@@ -169,7 +171,7 @@ export default function BoxPage() {
 
       const boxRes = await supabase
         .from("boxes")
-        .select("id, code, name, location")
+        .select("id, code, name, location_id, location")
         .eq("owner_id", userId)
         .eq("code", code)
         .maybeSingle();
@@ -181,6 +183,14 @@ export default function BoxPage() {
       }
 
       setBox(boxRes.data);
+
+      // Cache box -> location mapping for smart Back button
+      if (typeof window !== "undefined") {
+        const key = `boxLocation:${String(boxRes.data.code || code).toUpperCase()}`;
+        const locId = (boxRes.data as BoxRow).location_id;
+        if (locId) window.sessionStorage.setItem(key, locId);
+        else window.sessionStorage.removeItem(key);
+      }
 
       const itemsRes = await supabase
         .from("items")
@@ -1206,7 +1216,7 @@ export default function BoxPage() {
             })}
           </div>
 
-          <a
+          <Link
             href={`/box/${encodeURIComponent(box.code)}/new-item`}
             aria-label="Add item"
             style={{
@@ -1229,7 +1239,7 @@ export default function BoxPage() {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-          </a>
+          </Link>
 
           <button
             type="button"
