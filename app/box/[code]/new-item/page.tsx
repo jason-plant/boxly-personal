@@ -112,7 +112,6 @@ export default function NewItemPage() {
     const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
     setPhotoFile(file);
     setCompressInfo(null);
-    setTimeout(() => nameInputRef.current?.focus(), 50);
   }
 
   useEffect(() => {
@@ -247,9 +246,6 @@ export default function NewItemPage() {
     setCompressInfo(null);
     setDirty(false);
     setBusy(false);
-
-    // Re-focus the name field for fast entry
-    setTimeout(() => nameInputRef.current?.focus(), 0);
     return;
   }
 
@@ -341,7 +337,6 @@ export default function NewItemPage() {
               placeholder="Item name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus={!cameraOn}
               ref={nameInputRef}
             />
 
