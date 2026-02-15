@@ -62,7 +62,7 @@ function NewBoxInner() {
   const [newLocName, setNewLocName] = useState("");
   const [newLocBusy, setNewLocBusy] = useState(false);
 
-  async function loadData() {
+  async function loadData(): Promise<string[] | null> {
     setLoading(true);
     setError(null);
 
@@ -74,7 +74,7 @@ function NewBoxInner() {
       setExistingCodes([]);
       setLocations([]);
       setLoading(false);
-      return;
+      return null;
     }
 
     // existing codes (per user)
@@ -87,31 +87,35 @@ function NewBoxInner() {
     if (codesRes.error) {
       setError(codesRes.error.message);
       setExistingCodes([]);
+      setLoading(false);
+      return null;
     } else {
-      setExistingCodes((codesRes.data ?? []).map((b: BoxMini) => b.code));
-    }
+      const codes = (codesRes.data ?? []).map((b: BoxMini) => b.code);
+      setExistingCodes(codes);
 
-    // locations (per user)
-    const locRes = await supabase
-      .from("locations")
-      .select("id, name")
-      .eq("owner_id", userId)
-      .order("name");
+      // locations (per user)
+      const locRes = await supabase
+        .from("locations")
+        .select("id, name")
+        .eq("owner_id", userId)
+        .order("name");
 
-    if (locRes.error) {
-      setError((prev) => prev ?? locRes.error.message);
-      setLocations([]);
-    } else {
-      const locs = (locRes.data ?? []) as LocationRow[];
-      setLocations(locs);
+      if (locRes.error) {
+        setError((prev) => prev ?? locRes.error.message);
+        setLocations([]);
+      } else {
+        const locs = (locRes.data ?? []) as LocationRow[];
+        setLocations(locs);
 
-      // if locationId came from querystring but doesn't exist, clear it
-      if (locationId && !locs.some((l) => l.id === locationId)) {
-        setLocationId("");
+        // if locationId came from querystring but doesn't exist, clear it
+        if (locationId && !locs.some((l) => l.id === locationId)) {
+          setLocationId("");
+        }
       }
-    }
 
-    setLoading(false);
+      setLoading(false);
+      return codes;
+    }
   }
 
   useEffect(() => {
@@ -186,20 +190,24 @@ function NewBoxInner() {
       return { ok: false as const, message: sessionErr?.message || "Not logged in." };
     }
 
-    const insertRes = await supabase.from("boxes").insert([
-      {
-        owner_id: userId,
-        code: code.toUpperCase(),
-        name: name.trim() || null,
-        location_id: locationId || null,
-      },
-    ]);
+    const insertRes = await supabase
+      .from("boxes")
+      .insert([
+        {
+          owner_id: userId,
+          code: code.toUpperCase(),
+          name: name.trim() || null,
+          location_id: locationId || null,
+        },
+      ])
+      .select("code")
+      .single();
 
-    if (insertRes.error) {
-      return { ok: false as const, message: insertRes.error.message };
+    if (insertRes.error || !insertRes.data) {
+      return { ok: false as const, message: insertRes.error?.message || "Failed to create box." };
     }
 
-    return { ok: true as const };
+    return { ok: true as const, code: insertRes.data.code };
   }
 
   async function save() {
@@ -211,10 +219,10 @@ function NewBoxInner() {
 
     // If it collided, reload and try once more
     if (!result.ok) {
-      await loadData();
-      // compute a fresh next code after reload
+      const refreshedCodes = await loadData();
+      // compute a fresh next code after reload (avoid stale state)
       let max = 0;
-      for (const c of existingCodes) {
+      for (const c of refreshedCodes ?? existingCodes) {
         const n = parseBoxNumber(c);
         if (n !== null && n > max) max = n;
       }
@@ -229,10 +237,9 @@ function NewBoxInner() {
       return;
     }
 
-    // ✅ return to location if provided, otherwise boxes list
+    // ✅ take user straight into adding an item for this new box
     setDirty(false);
-    const dest = returnTo ? decodeURIComponent(returnTo) : "/boxes";
-    router.push(dest);
+    router.push(`/box/${encodeURIComponent(result.code)}/new-item`);
     router.refresh();
   }
 

@@ -122,7 +122,7 @@ export default function NewBoxInLocationPage() {
       return;
     }
 
-    router.push(`/box/${encodeURIComponent(insertRes.data.code)}`);
+    router.push(`/box/${encodeURIComponent(insertRes.data.code)}/new-item`);
     router.refresh();
   }
 
