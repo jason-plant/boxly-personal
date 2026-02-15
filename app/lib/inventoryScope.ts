@@ -44,19 +44,24 @@ export async function acceptPendingInvitesOnce(): Promise<void> {
   const token = sessionRes.session?.access_token;
   if (!token) return;
 
+  let ok = false;
   try {
-    await fetch("/api/accept-invite", {
+    const res = await fetch("/api/accept-invite", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
-  } finally {
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(`invitesAccepted:${user.id}`, "1");
-      // owner scope may have changed; clear cached owner id so next fetch sees membership.
-      window.sessionStorage.removeItem(`inventoryOwnerId:${user.id}`);
-    }
+    ok = res.ok;
+  } catch {
+    // Best-effort only; do not block app startup.
+    ok = false;
+  }
+
+  if (ok && typeof window !== "undefined") {
+    window.sessionStorage.setItem(`invitesAccepted:${user.id}`, "1");
+    // owner scope may have changed; clear cached owner id so next fetch sees membership.
+    window.sessionStorage.removeItem(`inventoryOwnerId:${user.id}`);
   }
 }

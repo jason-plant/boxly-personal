@@ -21,13 +21,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function init() {
-      const { data } = await supabase.auth.getUser();
-      if (!mounted) return;
-      setUser(data.user ?? null);
-      setLoading(false);
-      if (data.user) {
-        // best-effort: link any invites for this email
-        acceptPendingInvitesOnce();
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (!mounted) return;
+
+        setUser(data.user ?? null);
+        setLoading(false);
+
+        if (data.user) {
+          // best-effort: link any invites for this email
+          void acceptPendingInvitesOnce().catch(() => undefined);
+        }
+      } catch {
+        if (!mounted) return;
+        setUser(null);
+        setLoading(false);
       }
     }
 
@@ -38,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
       if (session?.user) {
-        acceptPendingInvitesOnce();
+        void acceptPendingInvitesOnce().catch(() => undefined);
       }
     });
 

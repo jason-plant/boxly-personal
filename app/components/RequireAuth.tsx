@@ -15,16 +15,27 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     let mounted = true;
 
     async function check() {
-      const { data } = await supabase.auth.getSession();
-      const hasSession = !!data.session;
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
 
-      if (!mounted) return;
+        const hasSession = !!data.session;
 
-      setAuthed(hasSession);
-      setChecking(false);
+        if (!mounted) return;
 
-      if (!hasSession && pathname !== "/login") {
-        router.replace("/login");
+        setAuthed(hasSession);
+        setChecking(false);
+
+        if (!hasSession && pathname !== "/login") {
+          router.replace("/login");
+        }
+      } catch {
+        if (!mounted) return;
+        setAuthed(false);
+        setChecking(false);
+        if (pathname !== "/login") {
+          router.replace("/login");
+        }
       }
     }
 

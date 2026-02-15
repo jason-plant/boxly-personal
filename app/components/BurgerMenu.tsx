@@ -54,6 +54,16 @@ export default function BurgerMenu() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
+  // Hooks must be called unconditionally and at the top-level.
+  // (These pull from IconSettings context.)
+  const iconLocations = useAppIcon("locations");
+  const iconBoxes = useAppIcon("boxes");
+  const iconSearch = useAppIcon("search");
+  const iconLabels = useAppIcon("labels");
+  const iconScanQR = useAppIcon("scanQR");
+  const iconScanItem = useAppIcon("scanItem");
+  const iconLogout = useAppIcon("logout");
+
   const [open, setOpen] = useState(false);
 
   // Interactive swipe state
@@ -201,14 +211,22 @@ export default function BurgerMenu() {
   const items = useMemo(() => {
     if (!user) return [];
     return [
-      { label: "Locations", href: "/locations", icon: useAppIcon("locations") },
-      { label: "Boxes", href: "/boxes", icon: useAppIcon("boxes") },
-      { label: "Search", href: "/search", icon: useAppIcon("search") },
-      { label: "Labels", href: "/labels", icon: useAppIcon("labels") },
-      { label: "Scan QR", href: "/scan", icon: useAppIcon("scanQR") },
-      { label: "Scan Item", href: "/scan-item", icon: useAppIcon("scanItem") },
+      { label: "Locations", href: "/locations", icon: iconLocations },
+      { label: "Boxes", href: "/boxes", icon: iconBoxes },
+      { label: "Search", href: "/search", icon: iconSearch },
+      { label: "Labels", href: "/labels", icon: iconLabels },
+      { label: "Scan QR", href: "/scan", icon: iconScanQR },
+      { label: "Scan Item", href: "/scan-item", icon: iconScanItem },
     ];
-  }, [user]);
+  }, [
+    user,
+    iconLocations,
+    iconBoxes,
+    iconSearch,
+    iconLabels,
+    iconScanQR,
+    iconScanItem,
+  ]);
 
   function go(href: string) {
     setOpen(false);
@@ -328,7 +346,7 @@ export default function BurgerMenu() {
 
           {user && (
             <MenuRow
-              icon={useAppIcon("logout")}
+              icon={iconLogout}
               label="Log out"
               onClick={async () => {
                 setOpen(false);
